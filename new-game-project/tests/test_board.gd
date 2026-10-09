@@ -68,5 +68,38 @@ func _init() -> void:
 	b.place(Vector2i(1, 0), N)
 	_check(b.is_full(), "full board")
 
+	# Bombs: rotation keeps the flag, and a cleared bomb wipes its 3x3 neighbourhood.
+	_check(Atoms.rotate_cw(E | Atoms.BOMB) == (S | Atoms.BOMB), "rotate keeps bomb flag")
+	_check(Atoms.connection_count(E | Atoms.BOMB) == 1, "bomb flag is not a connection")
+	b = Board.new(5, 5)
+	b.place(Vector2i(2, 1), N)
+	b.place(Vector2i(1, 2), N)
+	b.place(Vector2i(4, 4), N) # outside the blast
+	b.place(Vector2i(2, 2), E | Atoms.BOMB)
+	var boom := b.place(Vector2i(3, 2), W)
+	_check(boom.size() == 4, "bomb pair + 2 neighbours wiped (got %d)" % boom.size())
+	_check(b.last_exploded == [Vector2i(2, 2)], "one explosion recorded")
+	_check(b.is_empty(Vector2i(2, 1)) and b.is_empty(Vector2i(1, 2)), "neighbours wiped")
+	_check(b.get_atom(Vector2i(4, 4)) == N, "far atom survives")
+
+	# Chain reaction: a bomb caught in a blast explodes as well.
+	b = Board.new(7, 3)
+	b.place(Vector2i(0, 0), E | Atoms.BOMB)
+	b.place(Vector2i(3, 1), N | Atoms.BOMB) # chained: caught by blast of (1,0)
+	b.place(Vector2i(2, 1), N | Atoms.BOMB) # inside blast of the bomb at (1,0)
+	b.place(Vector2i(6, 1), N)              # reachable only through the chain
+	b.place(Vector2i(4, 1), S)              # next to second chained bomb (3,1)
+	var chain := b.place(Vector2i(1, 0), W | Atoms.BOMB)
+	_check(b.last_exploded.size() >= 2, "chain explodes (got %d)" % b.last_exploded.size())
+	_check(b.is_empty(Vector2i(4, 1)), "chain reached atom next to second bomb")
+	_check(b.get_atom(Vector2i(6, 1)) == N, "chain stops at radius")
+	_check(chain.size() == 5, "chain removed count (got %d)" % chain.size())
+
+	# A bomb whose molecule is still open does nothing.
+	b = Board.new(3, 3)
+	b.place(Vector2i(1, 1), N)
+	_check(b.place(Vector2i(0, 1), E | S | Atoms.BOMB).is_empty(), "open bomb molecule keeps everything")
+	_check(b.get_atom(Vector2i(1, 1)) == N, "neighbour intact")
+
 	print("failures: ", _failed)
 	quit(1 if _failed > 0 else 0)

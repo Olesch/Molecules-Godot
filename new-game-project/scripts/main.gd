@@ -12,12 +12,14 @@ const COLORS: Array[Color] = [
 	Color("e0a030"), # 3
 	Color("c0504d"), # 4
 ]
+const BOMB_COLOR := Color("2b2f38")
+const BLAST_COLOR := Color("ff9a3c")
 const BG_COLOR := Color("1e2229")
 const GRID_COLOR := Color("353b46")
 const STUB_OK := Color("e8ecf1")
 const STUB_OPEN := Color("ff5d5d")
 
-const SFX_NAMES: Array[String] = ["place", "rotate", "clear", "lose", "invalid"]
+const SFX_NAMES: Array[String] = ["place", "rotate", "clear", "lose", "invalid", "explode"]
 const SHAKE_MAX := 22.0
 const POP_TIME := 0.18
 
@@ -52,7 +54,7 @@ func _new_game() -> void:
 	_board = Board.new(BOARD_W, BOARD_H)
 	_score = 0
 	_game_over = false
-	_next_mask = Atoms.random_shape(_rng)
+	_next_mask = Atoms.random_atom(_rng)
 	_fx.clear()
 	_popups.clear()
 	_pop_age.clear()
@@ -124,7 +126,7 @@ func _try_place(p: Vector2i) -> void:
 		return
 	var cleared := _board.place(p, _next_mask)
 	_score += cleared.size()
-	_next_mask = Atoms.random_shape(_rng)
+	_next_mask = Atoms.random_atom(_rng)
 	if cleared.is_empty():
 		_pop_age[p] = 0.0
 		_play("place", 1.0, 0.05)
@@ -142,9 +144,16 @@ func _celebrate(cleared: Array[Vector2i]) -> void:
 	for i in cleared.size():
 		var center := _cell_center(cleared[i])
 		sum += center
-		var body := COLORS[Atoms.connection_count(_board.last_cleared_masks[i]) - 1]
+		var body := _atom_color(_board.last_cleared_masks[i])
 		_burst(center, body, 14, 300.0)
 		_fx.append({"kind": 1, "pos": center, "age": 0.0, "life": 0.4, "color": body, "size": 0.0, "vel": Vector2.ZERO})
+	for bomb in _board.last_exploded:
+		var at := _cell_center(bomb)
+		_burst(at, BLAST_COLOR, 36, 520.0)
+		_fx.append({"kind": 1, "pos": at, "age": 0.0, "life": 0.55, "color": BLAST_COLOR, "size": 0.0, "vel": Vector2.ZERO, "grow": 2.4})
+	if not _board.last_exploded.is_empty():
+		_play("explode", 1.0, 0.03)
+		_trauma = 1.0
 	_popups.append({"pos": sum / cleared.size(), "age": 0.0, "text": "+%d" % cleared.size()})
 	_play("clear", clampf(0.9 + 0.06 * (cleared.size() - 2), 0.8, 1.5))
 	_trauma = minf(1.0, _trauma + 0.25 + 0.06 * cleared.size())
@@ -220,8 +229,13 @@ func _draw() -> void:
 			if mask != 0:
 				_draw_atom(_cell_center(p), mask, 1.0, p, _pop_scale(p))
 
-	# Hover preview.
+	# Hover preview (a bomb also shows its blast area).
 	if not _game_over and _board.is_empty(_hover):
+		if Atoms.is_bomb(_next_mask):
+			var r := Atoms.BLAST_RADIUS
+			var area := Rect2(origin + Vector2(_hover - Vector2i(r, r)) * CELL, Vector2.ONE * CELL * (2 * r + 1))
+			draw_rect(area, Color(BLAST_COLOR, 0.12))
+			draw_rect(area, Color(BLAST_COLOR, 0.5), false, 2.0)
 		_draw_atom(_cell_center(_hover), _next_mask, 0.45, Vector2i(-1, -1))
 
 	_draw_fx(font)
@@ -239,6 +253,12 @@ func _draw() -> void:
 
 
 ## cell is the board cell used to tell open from bonded stubs; pass (-1,-1) to draw all stubs neutral.
+func _atom_color(atom: int) -> Color:
+	if Atoms.is_bomb(atom):
+		return BOMB_COLOR
+	return COLORS[Atoms.connection_count(atom) - 1]
+
+
 func _pop_scale(p: Vector2i) -> float:
 	if not _pop_age.has(p):
 		return 1.0
@@ -254,7 +274,7 @@ func _draw_fx(font: Font) -> void:
 		if f.kind == 0:
 			draw_circle(f.pos, f.size * (1.0 - 0.6 * k), col)
 		else:
-			draw_arc(f.pos, lerpf(CELL * 0.2, CELL * 0.95, k), 0.0, TAU, 32, col, 6.0 * (1.0 - k) + 1.0)
+			draw_arc(f.pos, lerpf(CELL * 0.2, CELL * 0.95 * f.get("grow", 1.0), k), 0.0, TAU, 32, col, 6.0 * (1.0 - k) + 1.0)
 	for pop in _popups:
 		var k: float = pop.age / 0.9
 		var col := Color("ffe27a")
@@ -272,6 +292,12 @@ func _draw_atom(center: Vector2, mask: int, alpha: float, cell: Vector2i, scale 
 			col.a = alpha
 			var tip := center + Vector2(Atoms.OFFSETS[dir]) * (CELL * 0.5 * scale)
 			draw_line(center, tip, col, 8.0 * scale)
-	var body := COLORS[Atoms.connection_count(mask) - 1]
+	var body := _atom_color(mask)
 	body.a = alpha
 	draw_circle(center, CELL * 0.27 * scale, body)
+	if Atoms.is_bomb(mask):
+		var ring := BLAST_COLOR
+		ring.a = alpha
+		draw_arc(center, CELL * 0.27 * scale, 0.0, TAU, 24, ring, 4.0 * scale)
+		draw_circle(center, CELL * 0.09 * scale, ring)
+		draw_line(center + Vector2(0, -CELL * 0.27) * scale, center + Vector2(CELL * 0.1, -CELL * 0.4) * scale, ring, 3.0 * scale)

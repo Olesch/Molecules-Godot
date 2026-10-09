@@ -105,10 +105,29 @@ def invalid():
     finish("invalid.wav", b, 0.03)
 
 
-for f in (place, rotate, clear, lose, invalid):
+def explode():
+    rng = random.Random(3)  # separate instance: leaves other sounds untouched
+    b = buf(0.8)
+    # low sub thump: sine sweeping 90 -> 35 Hz, fast attack, ~0.5s decay
+    add_tone(b, 0, 0.8, 90, 1.0, 6, "sine", f_end=35)
+    # noise burst through a one-pole low-pass with falling cutoff
+    y = 0.0
+    n = len(b)
+    for i in range(n):
+        t = i / SR
+        fc = 150.0 + 7000.0 * math.exp(-t * 14)
+        a = 1.0 - math.exp(-2 * math.pi * fc / SR)
+        y += a * ((rng.random() * 2 - 1) - y)
+        b[i] += y * 1.6 * math.exp(-t * 5)
+    # saturation for punch
+    b = [math.tanh(1.8 * x) for x in b]
+    finish("explode.wav", b, 0.2)
+
+
+for f in (place, rotate, clear, lose, invalid, explode):
     f()
 
-for n in ("place", "rotate", "clear", "lose", "invalid"):
+for n in ("place", "rotate", "clear", "lose", "invalid", "explode"):
     with wave.open(os.path.join(OUT, n + ".wav")) as w:
         fr = w.readframes(w.getnframes())
         s = struct.unpack("<%dh" % w.getnframes(), fr)

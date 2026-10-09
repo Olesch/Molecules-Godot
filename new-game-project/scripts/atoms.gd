@@ -1,11 +1,18 @@
 class_name Atoms
 extends RefCounted
-## Atom shapes are 4-bit masks. Bit index runs clockwise: 0=N, 1=E, 2=S, 3=W.
+## An atom is an int: the low 4 bits are connections (bit index runs clockwise:
+## 0=N, 1=E, 2=S, 3=W), higher bits are special flags such as BOMB.
 
 const N := 1
 const E := 2
 const S := 4
 const W := 8
+const CONNECTION_BITS := 15
+
+## Special flags.
+const BOMB := 16 ## When its molecule clears, also wipes the surrounding atoms.
+const BLAST_RADIUS := 1
+const BOMB_CHANCE := 0.12
 
 ## Grid step for each bit index.
 const OFFSETS: Array[Vector2i] = [
@@ -26,7 +33,7 @@ const SHAPES: Array[int] = [
 
 
 static func rotate_cw(mask: int) -> int:
-	var result := 0
+	var result := mask & ~CONNECTION_BITS
 	for i in 4:
 		if mask & (1 << i):
 			result |= 1 << ((i + 1) % 4)
@@ -43,6 +50,17 @@ static func connection_count(mask: int) -> int:
 		if mask & (1 << i):
 			count += 1
 	return count
+
+
+static func is_bomb(atom: int) -> bool:
+	return (atom & BOMB) != 0
+
+
+static func random_atom(rng: RandomNumberGenerator) -> int:
+	var atom := random_shape(rng)
+	if rng.randf() < BOMB_CHANCE:
+		atom |= BOMB
+	return atom
 
 
 static func random_shape(rng: RandomNumberGenerator) -> int:

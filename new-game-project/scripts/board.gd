@@ -8,6 +8,8 @@ var height: int
 var _cells: Array[int] = []
 ## Masks of the atoms removed by the last place() call, parallel to its returned cells.
 var last_cleared_masks: Array[int] = []
+## Cells of the bombs that exploded during the last place() call.
+var last_exploded: Array[Vector2i] = []
 
 
 func _init(w: int, h: int) -> void:
@@ -45,21 +47,46 @@ func is_bonded(p: Vector2i, dir: int) -> bool:
 	return in_bounds(n) and (get_atom(n) & (1 << Atoms.opposite(dir))) != 0
 
 
-## Places an atom and returns the cells cleared by it (empty if no molecule closed).
+## Places an atom and returns every cell cleared by it: the closed molecule plus
+## anything wiped by exploding bombs (empty if no molecule closed).
+## Bombs caught in a blast explode too.
 ## Returns an empty array without changing anything if the cell is not free.
 func place(p: Vector2i, mask: int) -> Array[Vector2i]:
 	var cleared: Array[Vector2i] = []
 	last_cleared_masks.clear()
-	if mask <= 0 or mask > 15 or not is_empty(p):
+	last_exploded.clear()
+	if (mask & Atoms.CONNECTION_BITS) == 0 or (mask & ~(Atoms.CONNECTION_BITS | Atoms.BOMB)) != 0 or not is_empty(p):
 		return cleared
 	_cells[p.y * width + p.x] = mask
 	var group := molecule_at(p)
 	if is_closed(group):
+		var removed: Array[Vector2i] = group.duplicate()
+		var bombs: Array[Vector2i] = []
 		for c in group:
-			last_cleared_masks.append(get_atom(c))
-			_cells[c.y * width + c.x] = 0
-		return group
+			bombs.append_array(_remove(c, removed, false))
+		while not bombs.is_empty():
+			var bomb: Vector2i = bombs.pop_back()
+			last_exploded.append(bomb)
+			for dy in range(-Atoms.BLAST_RADIUS, Atoms.BLAST_RADIUS + 1):
+				for dx in range(-Atoms.BLAST_RADIUS, Atoms.BLAST_RADIUS + 1):
+					var n := bomb + Vector2i(dx, dy)
+					if in_bounds(n) and get_atom(n) != 0:
+						bombs.append_array(_remove(n, removed, true))
+		return removed
 	return cleared
+
+
+## Empties a cell, records its mask, and returns it in an array if it was a bomb.
+func _remove(c: Vector2i, removed: Array[Vector2i], add_to_removed: bool) -> Array[Vector2i]:
+	var atom := get_atom(c)
+	last_cleared_masks.append(atom)
+	_cells[c.y * width + c.x] = 0
+	if add_to_removed:
+		removed.append(c)
+	var bombs: Array[Vector2i] = []
+	if Atoms.is_bomb(atom):
+		bombs.append(c)
+	return bombs
 
 
 ## All atoms linked to the one at p through mutual bonds (including p).
