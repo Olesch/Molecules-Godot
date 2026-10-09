@@ -34,7 +34,7 @@ def add_tone(b, start, dur, freq, amp, decay, wave_fn="sine", vib=0.0, vib_hz=5.
         b[n0 + i] += s * amp * math.exp(-decay * t)
 
 
-def finish(name, b, fade_out=0.02):
+def finish(name, b, fade_out=0.02, peak=0.8):
     fi = int(0.003 * SR)
     fo = int(fade_out * SR)
     for i in range(min(fi, len(b))):
@@ -43,7 +43,7 @@ def finish(name, b, fade_out=0.02):
         b[-1 - i] *= i / fo
     b[-1] = 0.0
     pk = max(abs(x) for x in b) or 1.0
-    b = [x * 0.8 / pk for x in b]
+    b = [x * peak / pk for x in b]
     with wave.open(os.path.join(OUT, name), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
@@ -124,10 +124,72 @@ def explode():
     finish("explode.wav", b, 0.2)
 
 
-for f in (place, rotate, clear, lose, invalid, explode):
+def attack():
+    rng = random.Random(4)
+    b = buf(0.35)
+    n = len(b)
+    y = 0.0
+    for i in range(n):
+        t = i / SR
+        u = t / 0.35
+        fc = 400.0 + 6000.0 * u * u  # rising cutoff
+        a = 1.0 - math.exp(-2 * math.pi * fc / SR)
+        y += a * ((rng.random() * 2 - 1) - y)
+        env = min(1.0, t / 0.02) * (0.3 + 0.7 * u) * (1.0 if t < 0.25 else math.exp(-(t - 0.25) * 40))
+        b[i] += y * 1.5 * env
+    add_tone(b, 0.0, 0.26, 300, 0.25, 0, "sine", f_end=1200)
+    # bright zap at the end
+    add_tone(b, 0.25, 0.10, 2400, 0.5, 18, "square", f_end=1400)
+    add_tone(b, 0.25, 0.10, 4800, 0.12, 25, "sine")
+    finish("attack.wav", b, 0.05)
+
+
+def garbage():
+    rng = random.Random(5)
+    b = buf(0.45)
+    add_tone(b, 0, 0.45, 70, 1.0, 7, "sine", f_end=40)
+    add_tone(b, 0, 0.2, 140, 0.25, 18, "tri", f_end=80)
+    y = 0.0
+    for st in (0.0, 0.07, 0.15, 0.24):
+        o = int(st * SR)
+        g = 0.9 - st * 1.5
+        for i in range(int(0.05 * SR)):
+            if o + i >= len(b):
+                break
+            y += 0.06 * ((rng.random() * 2 - 1) - y)  # rumbly low-passed noise
+            b[o + i] += y * 5.0 * g * math.exp(-i / SR * 60)
+    b = [math.tanh(1.3 * x) for x in b]
+    finish("garbage.wav", b, 0.12)
+
+
+def win():
+    b = buf(1.2)
+    notes = [523.25, 659.25, 783.99, 1046.5]
+    for k, f in enumerate(notes):
+        add_tone(b, k * 0.1, 0.12, f, 0.6, 6, "square")
+        add_tone(b, k * 0.1, 0.12, f * 2, 0.08, 6, "square")
+    st = 0.42
+    for f in (523.25, 659.25, 783.99, 1046.5):
+        add_tone(b, st, 1.2 - st, f, 0.35, 2.2, "square")
+        add_tone(b, st, 1.2 - st, f * 1.003, 0.12, 2.2, "tri")
+    finish("win.wav", b, 0.25)
+
+
+def warning():
+    b = buf(0.25)
+    add_tone(b, 0.0, 0.11, 660, 1.0, 4, "square")
+    add_tone(b, 0.125, 0.125, 520, 1.0, 4, "square")
+    y = 0.0
+    for i in range(len(b)):  # soften
+        y += 0.3 * (b[i] - y)
+        b[i] = y
+    finish("warning.wav", b, 0.04, peak=0.4)
+
+
+for f in (place, rotate, clear, lose, invalid, explode, attack, garbage, win, warning):
     f()
 
-for n in ("place", "rotate", "clear", "lose", "invalid", "explode"):
+for n in ("place", "rotate", "clear", "lose", "invalid", "explode", "attack", "garbage", "win", "warning"):
     with wave.open(os.path.join(OUT, n + ".wav")) as w:
         fr = w.readframes(w.getnframes())
         s = struct.unpack("<%dh" % w.getnframes(), fr)

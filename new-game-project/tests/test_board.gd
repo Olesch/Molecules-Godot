@@ -159,5 +159,28 @@ func _init() -> void:
 	b.place(Vector2i(3, 2), W)
 	_check(b.last_molecule_size == 2, "last_molecule_size excludes blast victims (got %d)" % b.last_molecule_size)
 
+	# Scoring and attack formulas (regression: shift precedence once mixed up blast points).
+	_check(Scoring.points(4, 0) == 10, "4-molecule = 10 points")
+	_check(Scoring.points(2, 5) == 3 + 5, "blast victims add 1 each (got %d)" % Scoring.points(2, 5))
+	_check(Scoring.points(0, 0) == 0, "no molecule, no points")
+	_check(Scoring.attack(2, 0) == 1 and Scoring.attack(4, 2) == 5 and Scoring.attack(0, 0) == 0, "attack formula")
+
+	# Garbage and snapshots.
+	var grng := RandomNumberGenerator.new()
+	grng.seed = 7
+	b = Board.new(4, 4)
+	var junk := b.add_garbage(5, grng)
+	_check(junk.size() == 5, "garbage placed (got %d)" % junk.size())
+	for c in junk:
+		_check(b.get_atom(c) != 0 and not Atoms.is_bomb(b.get_atom(c)) and not Atoms.is_wild(b.get_atom(c)), "garbage cell holds a plain atom")
+	var snap := b.snapshot()
+	var b2 := Board.new(4, 4)
+	b2.load_snapshot(snap)
+	_check(b2.snapshot() == snap, "snapshot round trip")
+	b2.load_snapshot(PackedInt32Array([1, 2, 3]))
+	_check(b2.snapshot() == snap, "bad snapshot ignored")
+	var full := Board.new(2, 2)
+	_check(full.add_garbage(10, grng).size() <= 4, "garbage cannot exceed free cells")
+
 	print("failures: ", _failed)
 	quit(1 if _failed > 0 else 0)

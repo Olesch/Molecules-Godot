@@ -144,18 +144,42 @@ func is_closed(group: Array[Vector2i]) -> bool:
 ## Scatters up to count random atoms with random rotation, skipping any that would
 ## complete a molecule (those would never clear, since nothing can attach to them).
 func preplace(count: int, rng: RandomNumberGenerator) -> void:
-	var placed := 0
+	_scatter(count, rng, true)
+
+
+## Drops stray atoms (no specials) onto random empty cells. Returns the cells used,
+## which may be fewer than count if the board is nearly full.
+func add_garbage(count: int, rng: RandomNumberGenerator) -> Array[Vector2i]:
+	return _scatter(count, rng, false)
+
+
+func _scatter(count: int, rng: RandomNumberGenerator, allow_specials: bool) -> Array[Vector2i]:
+	var placed: Array[Vector2i] = []
 	var tries := 0
-	while placed < count and tries < count * 20:
+	while placed.size() < count and tries < count * 20 + 40:
 		tries += 1
 		var p := Vector2i(rng.randi_range(0, width - 1), rng.randi_range(0, height - 1))
 		if get_atom(p) != 0:
 			continue
-		var atom := Atoms.random_atom(rng)
+		var atom := Atoms.random_atom(rng) if allow_specials else Atoms.random_shape(rng)
 		for i in rng.randi_range(0, 3):
 			atom = Atoms.rotate_cw(atom)
 		_cells[p.y * width + p.x] = atom
 		if is_closed(molecule_at(p)):
 			_cells[p.y * width + p.x] = 0
 			continue
-		placed += 1
+		placed.append(p)
+	return placed
+
+
+## Flat copy of the cells (row by row) for sending to the opponent.
+func snapshot() -> PackedInt32Array:
+	return PackedInt32Array(_cells)
+
+
+## Replaces the board with a snapshot of the same size; ignores bad data.
+func load_snapshot(cells: PackedInt32Array) -> void:
+	if cells.size() != width * height:
+		return
+	for i in cells.size():
+		_cells[i] = cells[i]
