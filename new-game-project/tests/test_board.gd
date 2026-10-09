@@ -152,5 +152,12 @@ func _init() -> void:
 			_check(false, "preplace round %d: filled=%d stuck=%s" % [round, filled, stuck])
 	_check(true, "preplace rounds done")
 
+	# Molecule size is tracked separately from blast victims.
+	b = Board.new(5, 5)
+	b.place(Vector2i(2, 1), N)
+	b.place(Vector2i(2, 2), E | Atoms.BOMB)
+	b.place(Vector2i(3, 2), W)
+	_check(b.last_molecule_size == 2, "last_molecule_size excludes blast victims (got %d)" % b.last_molecule_size)
+
 	print("failures: ", _failed)
 	quit(1 if _failed > 0 else 0)

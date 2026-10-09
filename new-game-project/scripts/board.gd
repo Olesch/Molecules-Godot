@@ -10,6 +10,8 @@ var _cells: Array[int] = []
 var last_cleared_masks: Array[int] = []
 ## Cells of the bombs that exploded during the last place() call.
 var last_exploded: Array[Vector2i] = []
+## Number of atoms in the molecule closed by the last place() call (0 if none); blasted extras not included.
+var last_molecule_size := 0
 
 
 func _init(w: int, h: int) -> void:
@@ -72,11 +74,13 @@ func place(p: Vector2i, mask: int) -> Array[Vector2i]:
 	var cleared: Array[Vector2i] = []
 	last_cleared_masks.clear()
 	last_exploded.clear()
+	last_molecule_size = 0
 	if not _is_valid_atom(mask) or not is_empty(p):
 		return cleared
 	_cells[p.y * width + p.x] = mask
 	var group := molecule_at(p)
 	if is_closed(group):
+		last_molecule_size = group.size()
 		var removed: Array[Vector2i] = group.duplicate()
 		var bombs: Array[Vector2i] = []
 		for c in group:

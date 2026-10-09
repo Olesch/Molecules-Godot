@@ -153,7 +153,6 @@ func _try_place(p: Vector2i) -> void:
 		_trauma = minf(1.0, _trauma + 0.12)
 		return
 	var cleared := _board.place(p, _queue[0])
-	_score += cleared.size()
 	_queue.pop_front()
 	_queue.append(Atoms.random_atom(_rng))
 	if cleared.is_empty():
@@ -169,6 +168,10 @@ func _try_place(p: Vector2i) -> void:
 
 
 func _celebrate(cleared: Array[Vector2i]) -> void:
+	# Triangle numbers reward big molecules; atoms wiped by blasts are worth 1 each.
+	var n := _board.last_molecule_size
+	var points := (n * (n + 1)) >> 1 + (cleared.size() - n)
+	_score += points
 	var sum := Vector2.ZERO
 	for i in cleared.size():
 		var center := _cell_center(cleared[i])
@@ -183,7 +186,7 @@ func _celebrate(cleared: Array[Vector2i]) -> void:
 	if not _board.last_exploded.is_empty():
 		_play("explode", 1.0, 0.03)
 		_trauma = 1.0
-	_popups.append({"pos": sum / cleared.size(), "age": 0.0, "text": "+%d" % cleared.size()})
+	_popups.append({"pos": sum / cleared.size(), "age": 0.0, "text": "+%d" % points})
 	_play("clear", clampf(0.9 + 0.06 * (cleared.size() - 2), 0.8, 1.5))
 	_trauma = minf(1.0, _trauma + 0.25 + 0.06 * cleared.size())
 
@@ -276,7 +279,7 @@ func _draw() -> void:
 	draw_string(font, Vector2(origin.x + 120, 28), "COMING UP", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, dim)
 	for i in range(1, _queue.size()):
 		_draw_atom(Vector2(origin.x + 150 + (i - 1) * 62, 78), _queue[i], 0.85, Vector2i(-1, -1), 0.6)
-	draw_string(font, Vector2(origin.x, 40), "ATOMS CLEARED: %d" % _score, HORIZONTAL_ALIGNMENT_RIGHT, BOARD_W * CELL, 22, STUB_OK)
+	draw_string(font, Vector2(origin.x, 40), "SCORE: %d" % _score, HORIZONTAL_ALIGNMENT_RIGHT, BOARD_W * CELL, 22, STUB_OK)
 	draw_string(font, Vector2(origin.x, size.y - 20), "Click: place   R / right-click / wheel: rotate   M: music", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, GRID_COLOR.lightened(0.5))
 
 	if _game_over:
