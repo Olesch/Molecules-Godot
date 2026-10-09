@@ -38,13 +38,30 @@ func is_full() -> bool:
 	return true
 
 
+func _is_valid_atom(atom: int) -> bool:
+	if atom == Atoms.WILD:
+		return true
+	return (atom & Atoms.CONNECTION_BITS) != 0 and (atom & ~(Atoms.CONNECTION_BITS | Atoms.BOMB)) == 0
+
+
 ## True if the connection of the atom at p pointing in direction dir is answered
-## by an atom next door pointing back.
+## by an atom next door pointing back, or by a wildcard.
 func is_bonded(p: Vector2i, dir: int) -> bool:
 	if not (get_atom(p) & (1 << dir)):
 		return false
 	var n := p + Atoms.OFFSETS[dir]
-	return in_bounds(n) and (get_atom(n) & (1 << Atoms.opposite(dir))) != 0
+	if not in_bounds(n):
+		return false
+	var other := get_atom(n)
+	return (other & (1 << Atoms.opposite(dir))) != 0 or Atoms.is_wild(other)
+
+
+## True if p and its neighbour in direction dir belong to the same molecule.
+func is_linked(p: Vector2i, dir: int) -> bool:
+	if is_bonded(p, dir):
+		return true
+	var n := p + Atoms.OFFSETS[dir]
+	return Atoms.is_wild(get_atom(p)) and in_bounds(n) and (get_atom(n) & (1 << Atoms.opposite(dir))) != 0
 
 
 ## Places an atom and returns every cell cleared by it: the closed molecule plus
@@ -55,7 +72,7 @@ func place(p: Vector2i, mask: int) -> Array[Vector2i]:
 	var cleared: Array[Vector2i] = []
 	last_cleared_masks.clear()
 	last_exploded.clear()
-	if (mask & Atoms.CONNECTION_BITS) == 0 or (mask & ~(Atoms.CONNECTION_BITS | Atoms.BOMB)) != 0 or not is_empty(p):
+	if not _is_valid_atom(mask) or not is_empty(p):
 		return cleared
 	_cells[p.y * width + p.x] = mask
 	var group := molecule_at(p)
@@ -100,7 +117,7 @@ func molecule_at(p: Vector2i) -> Array[Vector2i]:
 		var cur: Vector2i = stack.pop_back()
 		group.append(cur)
 		for dir in 4:
-			if is_bonded(cur, dir):
+			if is_linked(cur, dir):
 				var n: Vector2i = cur + Atoms.OFFSETS[dir]
 				if not seen.has(n):
 					seen[n] = true
@@ -109,11 +126,32 @@ func molecule_at(p: Vector2i) -> Array[Vector2i]:
 
 
 ## A group is closed when every connection of every member is bonded.
+## A lone atom (e.g. a wildcard) never counts.
 func is_closed(group: Array[Vector2i]) -> bool:
-	if group.is_empty():
+	if group.size() < 2:
 		return false
 	for c in group:
 		for dir in 4:
 			if (get_atom(c) & (1 << dir)) and not is_bonded(c, dir):
 				return false
 	return true
+
+
+## Scatters up to count random atoms with random rotation, skipping any that would
+## complete a molecule (those would never clear, since nothing can attach to them).
+func preplace(count: int, rng: RandomNumberGenerator) -> void:
+	var placed := 0
+	var tries := 0
+	while placed < count and tries < count * 20:
+		tries += 1
+		var p := Vector2i(rng.randi_range(0, width - 1), rng.randi_range(0, height - 1))
+		if get_atom(p) != 0:
+			continue
+		var atom := Atoms.random_atom(rng)
+		for i in rng.randi_range(0, 3):
+			atom = Atoms.rotate_cw(atom)
+		_cells[p.y * width + p.x] = atom
+		if is_closed(molecule_at(p)):
+			_cells[p.y * width + p.x] = 0
+			continue
+		placed += 1

@@ -13,6 +13,10 @@ const CONNECTION_BITS := 15
 const BOMB := 16 ## When its molecule clears, also wipes the surrounding atoms.
 const BLAST_RADIUS := 1
 const BOMB_CHANCE := 0.12
+## A wildcard has no connections of its own: it links to every neighbour that points
+## at it and never leaves an open end. It cannot clear on its own (a molecule needs 2+ atoms).
+const WILD := 32
+const WILD_CHANCE := 0.08
 
 ## Grid step for each bit index.
 const OFFSETS: Array[Vector2i] = [
@@ -56,7 +60,13 @@ static func is_bomb(atom: int) -> bool:
 	return (atom & BOMB) != 0
 
 
+static func is_wild(atom: int) -> bool:
+	return (atom & WILD) != 0
+
+
 static func random_atom(rng: RandomNumberGenerator) -> int:
+	if rng.randf() < WILD_CHANCE:
+		return WILD
 	var atom := random_shape(rng)
 	if rng.randf() < BOMB_CHANCE:
 		atom |= BOMB

@@ -20,12 +20,15 @@ const STUB_OK := Color("e8ecf1")
 const STUB_OPEN := Color("ff5d5d")
 
 const SFX_NAMES: Array[String] = ["place", "rotate", "clear", "lose", "invalid", "explode"]
+const PREPLACED := 10
+const QUEUE_SIZE := 4 ## the held atom plus the ones coming after it
+const WILD_COLOR := Color("b07cff")
 const SHAKE_MAX := 22.0
 const POP_TIME := 0.18
 
 var _board: Board
 var _rng := RandomNumberGenerator.new()
-var _next_mask := 0
+var _queue: Array[int] = []
 var _score := 0
 var _game_over := false
 var _hover := Vector2i(-1, -1)
@@ -36,6 +39,7 @@ var _popups: Array[Dictionary] = []
 var _pop_age := {} # Vector2i -> seconds since the atom was placed
 var _trauma := 0.0
 var _sfx := {}
+var _music: AudioStreamPlayer
 
 
 func _ready() -> void:
@@ -47,14 +51,33 @@ func _ready() -> void:
 			player.stream = load(path)
 			add_child(player)
 			_sfx[sfx_name] = player
+	_start_music()
 	_new_game()
+
+
+func _start_music() -> void:
+	const PATH := "res://assets/music/theme.wav"
+	if not ResourceLoader.exists(PATH):
+		return
+	var stream: AudioStreamWAV = load(PATH).duplicate()
+	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	stream.loop_begin = 0
+	stream.loop_end = int(stream.get_length() * stream.mix_rate)
+	_music = AudioStreamPlayer.new()
+	_music.stream = stream
+	_music.volume_db = -7.0
+	add_child(_music)
+	_music.play()
 
 
 func _new_game() -> void:
 	_board = Board.new(BOARD_W, BOARD_H)
 	_score = 0
 	_game_over = false
-	_next_mask = Atoms.random_atom(_rng)
+	_board.preplace(PREPLACED, _rng)
+	_queue.clear()
+	for i in QUEUE_SIZE:
+		_queue.append(Atoms.random_atom(_rng))
 	_fx.clear()
 	_popups.clear()
 	_pop_age.clear()
@@ -99,6 +122,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		match event.keycode:
 			KEY_R, KEY_SPACE:
 				_rotate_next()
+			KEY_M:
+				if _music:
+					_music.stream_paused = not _music.stream_paused
 			KEY_ENTER:
 				if _game_over:
 					_new_game()
@@ -107,9 +133,11 @@ func _unhandled_input(event: InputEvent) -> void:
 func _rotate_next(clockwise := true) -> void:
 	if _game_over:
 		return
+	if Atoms.is_wild(_queue[0]):
+		return
 	var times := 1 if clockwise else 3
 	for i in times:
-		_next_mask = Atoms.rotate_cw(_next_mask)
+		_queue[0] = Atoms.rotate_cw(_queue[0])
 	_play("rotate", 1.0, 0.04)
 	queue_redraw()
 
@@ -124,9 +152,10 @@ func _try_place(p: Vector2i) -> void:
 		_play("invalid")
 		_trauma = minf(1.0, _trauma + 0.12)
 		return
-	var cleared := _board.place(p, _next_mask)
+	var cleared := _board.place(p, _queue[0])
 	_score += cleared.size()
-	_next_mask = Atoms.random_atom(_rng)
+	_queue.pop_front()
+	_queue.append(Atoms.random_atom(_rng))
 	if cleared.is_empty():
 		_pop_age[p] = 0.0
 		_play("place", 1.0, 0.05)
@@ -231,20 +260,24 @@ func _draw() -> void:
 
 	# Hover preview (a bomb also shows its blast area).
 	if not _game_over and _board.is_empty(_hover):
-		if Atoms.is_bomb(_next_mask):
+		if Atoms.is_bomb(_queue[0]):
 			var r := Atoms.BLAST_RADIUS
 			var area := Rect2(origin + Vector2(_hover - Vector2i(r, r)) * CELL, Vector2.ONE * CELL * (2 * r + 1))
 			draw_rect(area, Color(BLAST_COLOR, 0.12))
 			draw_rect(area, Color(BLAST_COLOR, 0.5), false, 2.0)
-		_draw_atom(_cell_center(_hover), _next_mask, 0.45, Vector2i(-1, -1))
+		_draw_atom(_cell_center(_hover), _queue[0], 0.45, Vector2i(-1, -1))
 
 	_draw_fx(font)
 
 	# Header: next atom and score.
-	draw_string(font, Vector2(origin.x, 40), "NEXT", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, STUB_OK)
-	_draw_atom(Vector2(origin.x + 150, 55), _next_mask, 1.0, Vector2i(-1, -1))
-	draw_string(font, Vector2(origin.x + 300, 40), "ATOMS CLEARED: %d" % _score, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, STUB_OK)
-	draw_string(font, Vector2(origin.x, size.y - 20), "Click: place   R / right-click / wheel: rotate", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, GRID_COLOR.lightened(0.5))
+	var dim := GRID_COLOR.lightened(0.5)
+	draw_string(font, Vector2(origin.x, 28), "NOW", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, dim)
+	_draw_atom(Vector2(origin.x + 40, 78), _queue[0], 1.0, Vector2i(-1, -1))
+	draw_string(font, Vector2(origin.x + 120, 28), "COMING UP", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, dim)
+	for i in range(1, _queue.size()):
+		_draw_atom(Vector2(origin.x + 150 + (i - 1) * 62, 78), _queue[i], 0.85, Vector2i(-1, -1), 0.6)
+	draw_string(font, Vector2(origin.x, 40), "ATOMS CLEARED: %d" % _score, HORIZONTAL_ALIGNMENT_RIGHT, BOARD_W * CELL, 22, STUB_OK)
+	draw_string(font, Vector2(origin.x, size.y - 20), "Click: place   R / right-click / wheel: rotate   M: music", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, GRID_COLOR.lightened(0.5))
 
 	if _game_over:
 		draw_rect(Rect2(Vector2(-40, -40), size + Vector2(80, 80)), Color(0, 0, 0, 0.6))
@@ -254,6 +287,8 @@ func _draw() -> void:
 
 ## cell is the board cell used to tell open from bonded stubs; pass (-1,-1) to draw all stubs neutral.
 func _atom_color(atom: int) -> Color:
+	if Atoms.is_wild(atom):
+		return WILD_COLOR
 	if Atoms.is_bomb(atom):
 		return BOMB_COLOR
 	return COLORS[Atoms.connection_count(atom) - 1]
@@ -295,6 +330,16 @@ func _draw_atom(center: Vector2, mask: int, alpha: float, cell: Vector2i, scale 
 	var body := _atom_color(mask)
 	body.a = alpha
 	draw_circle(center, CELL * 0.27 * scale, body)
+	if Atoms.is_wild(mask):
+		# Four sockets: lit when a neighbour's connection is plugged into the wildcard.
+		for dir in 4:
+			var lit := on_board and _board.is_linked(cell, dir)
+			var dot := STUB_OK if lit else WILD_COLOR.darkened(0.45)
+			dot.a = alpha
+			draw_circle(center + Vector2(Atoms.OFFSETS[dir]) * CELL * 0.4 * scale, CELL * 0.07 * scale, dot)
+		var core := Color.WHITE
+		core.a = alpha
+		draw_arc(center, CELL * 0.16 * scale, 0.0, TAU, 20, core, 3.0 * scale)
 	if Atoms.is_bomb(mask):
 		var ring := BLAST_COLOR
 		ring.a = alpha

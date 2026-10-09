@@ -101,5 +101,56 @@ func _init() -> void:
 	_check(b.place(Vector2i(0, 1), E | S | Atoms.BOMB).is_empty(), "open bomb molecule keeps everything")
 	_check(b.get_atom(Vector2i(1, 1)) == N, "neighbour intact")
 
+	# Wildcards: link to every neighbour pointing at them, never leave an open end.
+	_check(Atoms.rotate_cw(Atoms.WILD) == Atoms.WILD, "wildcard rotation is a no-op")
+	b = Board.new(5, 3)
+	_check(b.place(Vector2i(2, 1), Atoms.WILD).is_empty(), "lone wildcard does not clear")
+	b = Board.new(5, 3)
+	b.place(Vector2i(0, 0), E)
+	_check(b.place(Vector2i(1, 0), Atoms.WILD).size() == 2, "wildcard closes a single dangling end")
+	b = Board.new(5, 3)
+	b.place(Vector2i(0, 0), E)
+	b.place(Vector2i(2, 0), W)
+	_check(b.place(Vector2i(1, 0), Atoms.WILD).size() == 3, "wildcard bridges two atoms")
+	b = Board.new(5, 3)
+	b.place(Vector2i(0, 0), S)
+	_check(b.place(Vector2i(1, 0), Atoms.WILD).is_empty(), "atom not pointing at wildcard is unlinked")
+	b = Board.new(5, 3)
+	b.place(Vector2i(0, 0), E | S)
+	_check(b.place(Vector2i(1, 0), Atoms.WILD).is_empty(), "other open end still blocks the clear")
+	b = Board.new(5, 3)
+	b.place(Vector2i(1, 1), Atoms.WILD)
+	_check(b.place(Vector2i(2, 1), Atoms.WILD).is_empty(), "two wildcards do not link")
+	b = Board.new(5, 3)
+	b.place(Vector2i(0, 0), E)
+	b.place(Vector2i(1, 0), Atoms.WILD)
+	_check(b.get_atom(Vector2i(0, 0)) == 0, "wildcard placed second still cleared the first")
+
+	# Wildcard + bomb: wildcard is wiped by a blast like any other atom.
+	b = Board.new(5, 5)
+	b.place(Vector2i(2, 1), Atoms.WILD)
+	b.place(Vector2i(2, 2), E | Atoms.BOMB)
+	b.place(Vector2i(3, 2), W)
+	_check(b.is_empty(Vector2i(2, 1)), "blast wipes wildcard")
+
+	# Preplacement never leaves a closed (uncleareable) molecule.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 12345
+	for round in 20:
+		b = Board.new(8, 8)
+		b.preplace(10, rng)
+		var filled := 0
+		var stuck := false
+		for y in 8:
+			for x in 8:
+				var p := Vector2i(x, y)
+				if b.get_atom(p) != 0:
+					filled += 1
+					if b.is_closed(b.molecule_at(p)):
+						stuck = true
+		if filled == 0 or filled > 10 or stuck:
+			_check(false, "preplace round %d: filled=%d stuck=%s" % [round, filled, stuck])
+	_check(true, "preplace rounds done")
+
 	print("failures: ", _failed)
 	quit(1 if _failed > 0 else 0)
