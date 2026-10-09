@@ -47,7 +47,7 @@ func is_bonded(p: Vector2i, dir: int) -> bool:
 ## Returns an empty array without changing anything if the cell is not free.
 func place(p: Vector2i, mask: int) -> Array[Vector2i]:
 	var cleared: Array[Vector2i] = []
-	if mask == 0 or not is_empty(p):
+	if mask <= 0 or mask > 15 or not is_empty(p):
 		return cleared
 	_cells[p.y * width + p.x] = mask
 	var group := molecule_at(p)
