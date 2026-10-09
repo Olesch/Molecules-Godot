@@ -131,7 +131,7 @@ func _from_peer() -> bool:
 	return _peer_id != 0 and multiplayer.get_remote_sender_id() == _peer_id
 
 
-@rpc("any_peer", "call_remote", "unreliable_ordered")
+@rpc("any_peer", "call_remote", "reliable")
 func _rpc_snapshot(cells: PackedInt32Array) -> void:
 	if not _from_peer() or cells.size() != CELL_COUNT:
 		return

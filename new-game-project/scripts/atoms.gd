@@ -35,6 +35,9 @@ const SHAPES: Array[int] = [
 	N | E | S | W,
 ]
 
+## Relative odds for SHAPES (tuned with tests/balance_sim.gd: fewer crosses lengthens solo games).
+const SHAPE_WEIGHTS: Array[float] = [1.5, 1.5, 1.5, 1.0, 0.4]
+
 
 static func rotate_cw(mask: int) -> int:
 	var result := mask & ~CONNECTION_BITS
@@ -74,4 +77,4 @@ static func random_atom(rng: RandomNumberGenerator) -> int:
 
 
 static func random_shape(rng: RandomNumberGenerator) -> int:
-	return SHAPES[rng.randi_range(0, SHAPES.size() - 1)]
+	return SHAPES[rng.rand_weighted(SHAPE_WEIGHTS)]

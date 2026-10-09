@@ -24,6 +24,7 @@ var _remote: Playfield
 var _sfx := {}
 var _music: AudioStreamPlayer
 var _sfx_rng := RandomNumberGenerator.new()
+var _waiting_for_rematch := false
 
 
 func _ready() -> void:
@@ -147,10 +148,12 @@ func _enter_versus() -> void:
 	add_child(_remote)
 	_layout()
 	_local.set_overlay("Connected!", "Starting...", GOOD)
+	_waiting_for_rematch = true
 	_net.send_ready()
 
 
 func _back_to_menu(status := "") -> void:
+	_waiting_for_rematch = false
 	_net.close()
 	_free_playfields()
 	_mode = Mode.MENU
@@ -207,6 +210,7 @@ func _on_net_disconnected() -> void:
 func _on_game_start(seed_value: int) -> void:
 	if _mode != Mode.VERSUS:
 		return
+	_waiting_for_rematch = false
 	_local.start(seed_value)
 	_remote.start(seed_value)
 	_remote.set_overlay("")
@@ -224,7 +228,12 @@ func _on_peer_attack(amount: int) -> void:
 
 
 func _on_peer_lost() -> void:
-	if _mode != Mode.VERSUS or _local.finished:
+	if _mode != Mode.VERSUS:
+		return
+	if _local.finished:
+		# Both boards filled at about the same time.
+		_local.set_overlay("DRAW", "Press Enter for a rematch", DIM_TEXT)
+		_remote.set_overlay("DRAW", "", DIM_TEXT)
 		return
 	_local.set_overlay("YOU WIN!", "Press Enter for a rematch", GOOD)
 	_remote.set_overlay("DEFEATED", "", BAD)
@@ -243,6 +252,9 @@ func _on_local_lost() -> void:
 
 func _on_restart_requested() -> void:
 	if _mode == Mode.VERSUS:
+		if _waiting_for_rematch:
+			return
+		_waiting_for_rematch = true
 		_local.set_overlay("Waiting for opponent...", "", DIM_TEXT)
 		_net.send_ready()
 	elif _mode == Mode.SOLO:

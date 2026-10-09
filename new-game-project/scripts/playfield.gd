@@ -191,8 +191,7 @@ func try_place(p: Vector2i) -> void:
 			_lose()
 	else:
 		_celebrate(cleared)
-	if not finished:
-		board_changed.emit(board.snapshot())
+	board_changed.emit(board.snapshot()) # also after losing, so the opponent sees the final board
 	queue_redraw()
 
 
