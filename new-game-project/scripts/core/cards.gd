@@ -42,7 +42,7 @@ const _S := Rarity.SUPER
 static var DEFS: Dictionary = {
 	LONG_VIEW: _d("Long View", _B, 4, "+1 preview atom per level (you start with 1)"),
 	DEMOLITION: _d("Demolition", _B, 3, "+5% bomb chance per level"),
-	MINI_BOMBS: _d("Mini Bombs", _B, 3, "Bombs can also appear on smaller atoms: 3, then 2, then 1 connection (only 4 at the start)"),
+	MINI_BOMBS: _d("Mini Bombs", _B, 3, "Bombs can also appear on atoms with fewer connections: one fewer per level (only the most-connected atoms at the start)"),
 	JOKER_SUPPLY: _d("Joker Supply", _B, 5, "+3% wildcard chance per level (none at the start)"),
 	HIGH_SCORER: _d("High Scorer", _B, 5, "+10% points per level"),
 	HEAVY_HITTER: _d("Heavy Hitter", _B, 5, "+10% attack per level", true),

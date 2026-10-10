@@ -24,7 +24,11 @@ const REROLL_RADIUS := 22.0 ## the round Reroll button next to the held atom
 const REROLL_SLOT := 62.0 ## header width it takes, pushing the coming-up queue to the right
 const WARN_SECONDS := 3.0 ## timed mode: the warning sound and red countdown start this far ahead
 
-var cell_size := 72
+const HEX_BOARD_UNITS := 8.5 ## a hex board is as wide as a square one when its cells are width / 8.5
+
+var base_cell_size := 72 ## cell width of a square board; hex cells are sized to match its width
+var cell_size := 72.0
+var topology: Topology = Topology.square()
 var interactive := true
 var title := ""
 ## Where the node sits when not shaking; set by whoever lays out the scene.
@@ -72,11 +76,11 @@ var _offer_wait := 0.0 ## seconds to hold back a level-up card pick so the clear
 
 func _ready() -> void:
 	_fx_rng.randomize()
-	_fx.cell_size = cell_size
+	_apply_topology()
 	_fx.ghost_fired.connect(_on_ghost_fired)
 	if interactive:
 		_card_overlay = CardOverlay.new()
-		_card_overlay.board_size = Vector2(BOARD_W, BOARD_H) * cell_size
+		_card_overlay.board_size = board_pixel_size()
 		_card_overlay.picked.connect(_on_card_picked)
 		add_child(_card_overlay)
 	if board == null:
@@ -86,7 +90,10 @@ func _ready() -> void:
 ## Resets to a fresh game. The same seed gives the same preplaced atoms and atom sequence.
 func start(seed_value: int) -> void:
 	_queue_rng.seed = seed_value
-	board = Board.new(BOARD_W, BOARD_H)
+	_apply_topology()
+	board = Board.new(BOARD_W, BOARD_H, topology)
+	if _card_overlay:
+		_card_overlay.board_size = board_pixel_size()
 	_apply_rules_to_board()
 	board.preplace(mods.preplaced_count(PREPLACED), _queue_rng)
 	_danger.ghosts.clear()
@@ -117,13 +124,27 @@ func start(seed_value: int) -> void:
 		_maybe_offer.call_deferred()
 
 
+## Takes the topology from the config and sizes the cells so a hex board is as wide as a
+## square one. Must run before anything is drawn.
+func _apply_topology() -> void:
+	topology = Topology.for_id(config.board_id())
+	var square_width := BOARD_W * float(base_cell_size)
+	cell_size = square_width / HEX_BOARD_UNITS if topology.id == "hex" else float(base_cell_size)
+	_fx.topology = topology
+	_fx.cell_size = cell_size
+
+
+func board_pixel_size() -> Vector2:
+	return topology.board_pixel_size(BOARD_W, BOARD_H, cell_size)
+
+
 func _apply_rules_to_board() -> void:
 	board.max_open_ends = mods.max_open_ends()
 	board.min_molecule = mods.min_molecule()
 
 
 func _new_atom() -> int:
-	return Atoms.random_atom(_queue_rng, mods.bomb_chance(), mods.wild_chance(), mods.shape_weights(), mods.min_bomb_connections())
+	return Atoms.random_atom(_queue_rng, mods.bomb_chance(), mods.wild_chance(), mods.shape_weights(topology), mods.min_bomb_connections(topology), topology)
 
 
 ## Grows or shrinks the queue to the size the current cards allow.
@@ -172,7 +193,7 @@ func apply_snapshot(cells: PackedInt32Array) -> void:
 
 func _cell_at(global_pos: Vector2) -> Vector2i:
 	var rel := global_pos - get_parent_global_offset() - home_position
-	return Vector2i(floori(rel.x / cell_size), floori(rel.y / cell_size))
+	return topology.cell_at(rel, cell_size)
 
 
 func get_parent_global_offset() -> Vector2:
@@ -230,7 +251,7 @@ func rotate_held(clockwise := true) -> void:
 		return
 	var times := 1 if clockwise else 3
 	for i in times:
-		_queue[0] = Atoms.rotate_cw(_queue[0])
+		_queue[0] = board.topology.rotate_cw(_queue[0])
 	sfx_requested.emit("rotate", 1.0)
 	queue_redraw()
 
@@ -427,7 +448,7 @@ func _celebrate(cleared: Array[Vector2i]) -> void:
 	if mods.has(Cards.GARDENER):
 		_remove_random_stray()
 	if mods.has(Cards.OVERCHARGE) and molecule >= 4:
-		_queue.insert(0, Atoms.random_shape(_queue_rng, mods.shape_weights()) | Atoms.BOMB)
+		_queue.insert(0, Atoms.random_shape(_queue_rng, mods.shape_weights(topology), topology) | Atoms.BOMB)
 		_fit_queue()
 		sfx_requested.emit("clear", 1.3)
 	if progression.add_xp(points) > 0:
@@ -479,7 +500,7 @@ func _on_card_picked(card_id: String) -> void:
 		_apply_rules_to_board()
 		_fit_queue()
 		var def := Cards.get_def(card_id)
-		_fx.popup(Vector2(cell_size * BOARD_W / 2.0, cell_size * 2.0), String(def.get("name", card_id)))
+		_fx.popup(Vector2(board_pixel_size().x / 2.0, cell_size * 2.0), String(def.get("name", card_id)))
 		sfx_requested.emit("win", 1.0)
 		progression_changed.emit()
 		queue_redraw()
@@ -518,12 +539,12 @@ func _draw() -> void:
 	if board == null:
 		return
 	var font := ThemeDB.fallback_font
-	var board_px := Vector2(BOARD_W, BOARD_H) * cell_size
+	var board_px := board_pixel_size()
 
 	for y in BOARD_H:
 		for x in BOARD_W:
 			var p := Vector2i(x, y)
-			draw_rect(Rect2(Vector2(p) * cell_size, Vector2(cell_size, cell_size)), Palette.GRID, false, 1.0)
+			_draw_cell_outline(p)
 			var mask := board.get_atom(p)
 			if mask != 0:
 				_draw_atom(_cell_center(p), mask, 1.0, p, _fx.pop_scale(p))
@@ -531,10 +552,10 @@ func _draw() -> void:
 	# Hover preview (a bomb also shows its blast area).
 	if interactive and not finished and board.is_empty(_hover):
 		if Atoms.is_bomb(_queue[0]):
-			var r := Atoms.BLAST_RADIUS
-			var area := Rect2(Vector2(_hover - Vector2i(r, r)) * cell_size, Vector2.ONE * cell_size * (2 * r + 1))
-			draw_rect(area, Color(Palette.ORANGE, 0.12))
-			draw_rect(area, Color(Palette.ORANGE, 0.5), false, 2.0)
+			for c in blast_preview_cells(_hover):
+				var poly := _cell_poly(c)
+				draw_colored_polygon(poly, Color(Palette.ORANGE, 0.12))
+				_draw_closed(poly, Color(Palette.ORANGE, 0.5), 2.0)
 		_draw_atom(_cell_center(_hover), _queue[0], 0.45, Vector2i(-1, -1))
 
 	if _danger_active() and not finished:
@@ -558,6 +579,27 @@ func _draw() -> void:
 		draw_string(font, Vector2(0, mid - 10), _overlay_title, HORIZONTAL_ALIGNMENT_CENTER, board_px.x, big, _overlay_color)
 		if _overlay_sub != "":
 			draw_string(font, Vector2(0, mid + 28), _overlay_sub, HORIZONTAL_ALIGNMENT_CENTER, board_px.x, 20 if interactive else 12, Palette.TEXT)
+
+
+## The cells a bomb placed at p would wipe (for the hover preview).
+func blast_preview_cells(p: Vector2i) -> Array[Vector2i]:
+	return board.topology.cells_within(p, Atoms.BLAST_RADIUS, BOARD_W, BOARD_H)
+
+
+func _cell_poly(p: Vector2i) -> PackedVector2Array:
+	return topology.cell_polygon(p, cell_size)
+
+
+func _draw_closed(poly: PackedVector2Array, color: Color, width: float) -> void:
+	var pts := poly.duplicate()
+	pts.append(poly[0])
+	draw_polyline(pts, color, width)
+
+
+## Grid line of one cell. Shared edges are drawn by two cells; the thin dim colour keeps
+## that unnoticeable.
+func _draw_cell_outline(p: Vector2i) -> void:
+	_draw_closed(_cell_poly(p), Palette.GRID, 1.0)
 
 
 ## True when the next drop is imminent (red countdown).
@@ -694,4 +736,4 @@ func _draw_card_rows(font: Font, board_px: Vector2) -> void:
 
 
 func _draw_atom(center: Vector2, mask: int, alpha: float, cell: Vector2i, scale := 1.0, unit_px := -1) -> void:
-	AtomPainter.draw(self, center, mask, alpha, scale, cell_size if unit_px < 0 else unit_px, board, cell)
+	AtomPainter.draw(self, center, mask, alpha, scale, cell_size if unit_px < 0 else unit_px, board, cell, topology)

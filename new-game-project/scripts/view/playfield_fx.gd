@@ -12,7 +12,8 @@ const SHAKE_MAX := 22.0
 const POP_TIME := 0.18
 const POPUP_TIME := 0.9
 
-var cell_size := 72
+var cell_size := 72.0
+var topology: Topology = Topology.square() ## set by the Playfield
 
 var _items: Array[Dictionary] = [] # particles, rings and sparks share one list
 var _popups: Array[Dictionary] = [] # floating score text
@@ -44,7 +45,7 @@ func has_ghosts() -> bool:
 
 
 func cell_center(p: Vector2i) -> Vector2:
-	return (Vector2(p) + Vector2(0.5, 0.5)) * cell_size
+	return topology.cell_center(p, cell_size)
 
 
 ## Spawns count dots flying outward from pos.
@@ -167,7 +168,7 @@ func paint(canvas: CanvasItem, board: Board) -> void:
 		var center := cell_center(g.cell)
 		var lead: float = g.delay - g.age # seconds until the wave arrives
 		var charge := clampf(1.0 - lead / 0.1, 0.0, 1.0)
-		AtomPainter.draw(canvas, center, g.mask, 1.0, 1.0 + 0.2 * charge, cell_size, board, Vector2i(-1, -1))
+		AtomPainter.draw(canvas, center, g.mask, 1.0, 1.0 + 0.2 * charge, cell_size, board, Vector2i(-1, -1), topology)
 		if charge > 0.0:
 			canvas.draw_arc(center, cell_size * (0.3 + 0.1 * charge), 0.0, TAU, 24, Color(1, 1, 1, 0.8 * charge), 3.0 * line_scale)
 	for f in _items:

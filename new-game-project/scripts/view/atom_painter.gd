@@ -7,6 +7,8 @@ const COLORS: Array[Color] = [
 	Color("4a90d9"), # 2
 	Color("e0a030"), # 3
 	Color("c0504d"), # 4
+	Color("3fb8af"), # 5 (hex)
+	Color("d96fa8"), # 6 (hex)
 ]
 const BOMB_COLOR := Color("2b2f38")
 
@@ -16,30 +18,35 @@ static func color(atom: int) -> Color:
 		return Palette.PURPLE
 	if Atoms.is_bomb(atom):
 		return BOMB_COLOR
-	return COLORS[Atoms.connection_count(atom) - 1]
+	var count := 0
+	for i in 6:
+		if atom & (1 << i):
+			count += 1
+	return COLORS[clampi(count, 1, COLORS.size()) - 1]
 
 
 ## cell is the board cell used to tell open from bonded stubs; pass (-1,-1) or a null board
 ## to draw all stubs neutral. unit is the pixel size of one cell.
-static func draw(canvas: CanvasItem, center: Vector2, mask: int, alpha: float, scale: float, unit: float, board: Board, cell: Vector2i) -> void:
+static func draw(canvas: CanvasItem, center: Vector2, mask: int, alpha: float, scale: float, unit: float, board: Board, cell: Vector2i, topology: Topology = null) -> void:
+	var topo := topology if topology != null else Topology.square()
 	var on_board := board != null and board.in_bounds(cell)
-	for dir in 4:
+	for dir in topo.dir_count:
 		if mask & (1 << dir):
 			var open := on_board and not board.is_bonded(cell, dir)
 			var col := Palette.BAD if open else Palette.TEXT
 			col.a = alpha
-			var tip := center + Vector2(Atoms.OFFSETS[dir]) * (unit * 0.5 * scale)
+			var tip := center + topo.dir_vector(dir) * (unit * 0.5 * scale)
 			canvas.draw_line(center, tip, col, 8.0 * scale * unit / 72.0)
 	var body := color(mask)
 	body.a = alpha
 	canvas.draw_circle(center, unit * 0.27 * scale, body)
 	if Atoms.is_wild(mask):
-		# Four sockets: lit when a neighbour's connection is plugged into the wildcard.
-		for dir in 4:
+		# One socket per direction: lit when a neighbour's connection is plugged into the wildcard.
+		for dir in topo.dir_count:
 			var lit := on_board and board.is_linked(cell, dir)
 			var dot := Palette.TEXT if lit else Palette.PURPLE.darkened(0.45)
 			dot.a = alpha
-			canvas.draw_circle(center + Vector2(Atoms.OFFSETS[dir]) * unit * 0.4 * scale, unit * 0.07 * scale, dot)
+			canvas.draw_circle(center + topo.dir_vector(dir) * unit * 0.4 * scale, unit * 0.07 * scale, dot)
 		var core := Color.WHITE
 		core.a = alpha
 		canvas.draw_arc(center, unit * 0.16 * scale, 0.0, TAU, 20, core, 3.0 * scale * unit / 72.0)

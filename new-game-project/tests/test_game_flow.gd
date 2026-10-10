@@ -62,6 +62,18 @@ func _init() -> void:
 	await process_frame
 	_check(g._local.config.pressure() == GameConfig.PRESSURE_NONE and g._local._danger.ghosts.is_empty(), "Relaxed starts without strays")
 
+	# The Board row offers square and hexagonal; Hexagonal starts a hex playfield.
+	g._back_to_menu()
+	g._on_menu_choose("solo", "")
+	_check(g._setup.option_buttons("board").size() == 2 and g._setup.current_config().board_id() == "square", "setup offers a Board row defaulting to square")
+	for b in g._setup.option_buttons("board"):
+		if b.text == "Hexagonal":
+			b.pressed.emit()
+	g._setup.start_button().pressed.emit()
+	await process_frame
+	_check(g._local.topology.id == "hex" and g._local.board.topology.id == "hex", "Start with Hexagonal gives a hex playfield")
+	_check(GameConfig.load_from(CONFIG_PATH).board_id() == "hex", "the board choice was saved")
+
 	# Keyboard: Escape goes back, Enter starts.
 	g._back_to_menu()
 	g._on_menu_choose("solo", "")

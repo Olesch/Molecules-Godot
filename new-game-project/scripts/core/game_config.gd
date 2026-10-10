@@ -20,6 +20,15 @@ const OPTIONS: Array[Dictionary] = [
 			{"value": PRESSURE_NONE, "label": "Relaxed", "help": "No stray atoms. Play at your own pace."},
 		],
 	},
+	{
+		"id": "board",
+		"label": "Board",
+		"default": "square",
+		"choices": [
+			{"value": "square", "label": "Square", "help": "Classic grid: atoms connect up, down, left and right."},
+			{"value": "hex", "label": "Hexagonal", "help": "Six neighbours per cell: atoms rotate in 60 degree steps and bombs blast a flower of 7 cells."},
+		],
+	},
 ]
 
 var values := {} ## option id -> chosen value
@@ -58,6 +67,10 @@ func set_value(id: String, value: String) -> bool:
 
 func pressure() -> String:
 	return get_value("pressure")
+
+
+func board_id() -> String:
+	return get_value("board")
 
 
 func duplicate_config() -> GameConfig:

@@ -89,7 +89,7 @@ func _draw() -> void:
 func _layout() -> void:
 	var size := get_viewport_rect().size
 	if _local:
-		var board_w := Playfield.BOARD_W * LOCAL_CELL
+		var board_w := _local.board_pixel_size().x
 		if _mode == Mode.VERSUS:
 			_local.home_position = Vector2(MARGIN, Playfield.HEADER)
 		else:
@@ -106,11 +106,13 @@ func _layout() -> void:
 func _make_local(progression: Progression, versus: bool) -> void:
 	_free_playfields()
 	_local = Playfield.new()
-	_local.cell_size = LOCAL_CELL
+	_local.base_cell_size = LOCAL_CELL
 	_local.interactive = true
 	_local.progression = progression
 	_local.versus = versus
 	_local.config = _config.duplicate_config()
+	if versus:
+		_local.config.set_value("board", "square") # versus is square only
 	add_child(_local)
 	_local.progression_changed.connect(_on_progression_changed)
 	_local.sfx_requested.connect(_play)
@@ -151,7 +153,7 @@ func _enter_versus() -> void:
 	_local.attack.connect(_net.send_attack)
 	_local.board_changed.connect(_net.send_snapshot)
 	_remote = Playfield.new()
-	_remote.cell_size = REMOTE_CELL
+	_remote.base_cell_size = REMOTE_CELL
 	_remote.interactive = false
 	_remote.title = "OPPONENT"
 	add_child(_remote)
