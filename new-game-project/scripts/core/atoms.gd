@@ -12,11 +12,14 @@ const CONNECTION_BITS := 15
 ## Special flags.
 const BOMB := 16 ## When its molecule clears, also wipes the surrounding atoms.
 const BLAST_RADIUS := 1
-const BOMB_CHANCE := 0.12
+## Chance that an eligible atom is a bomb. Only atoms with at least BOMB_MIN_CONNECTIONS
+## connections are eligible; the Mini Bombs card lowers that threshold.
+const BOMB_CHANCE := 0.35
+const BOMB_MIN_CONNECTIONS := 4
 ## A wildcard has no connections of its own: it links to every neighbour that points
 ## at it and never leaves an open end. It cannot clear on its own (a molecule needs 2+ atoms).
 const WILD := 32
-const WILD_CHANCE := 0.08
+const WILD_CHANCE := 0.0 ## no wildcards until the Joker Supply card is leveled
 
 ## Grid step for each bit index.
 const OFFSETS: Array[Vector2i] = [
@@ -68,11 +71,14 @@ static func is_wild(atom: int) -> bool:
 
 
 ## Chances and shape weights can be overridden (powerup cards change them).
-static func random_atom(rng: RandomNumberGenerator, bomb_chance := BOMB_CHANCE, wild_chance := WILD_CHANCE, weights := SHAPE_WEIGHTS) -> int:
-	if rng.randf() < wild_chance:
-		return WILD
+## The rolls are always drawn, so the random sequence does not depend on the chances.
+static func random_atom(rng: RandomNumberGenerator, bomb_chance := BOMB_CHANCE, wild_chance := WILD_CHANCE, weights := SHAPE_WEIGHTS, min_bomb_connections := BOMB_MIN_CONNECTIONS) -> int:
+	var wild_roll := rng.randf()
 	var atom := random_shape(rng, weights)
-	if rng.randf() < bomb_chance:
+	var bomb_roll := rng.randf()
+	if wild_roll < wild_chance:
+		return WILD
+	if connection_count(atom) >= min_bomb_connections and bomb_roll < bomb_chance:
 		atom |= BOMB
 	return atom
 

@@ -123,7 +123,7 @@ func _apply_rules_to_board() -> void:
 
 
 func _new_atom() -> int:
-	return Atoms.random_atom(_queue_rng, mods.bomb_chance(), mods.wild_chance(), mods.shape_weights())
+	return Atoms.random_atom(_queue_rng, mods.bomb_chance(), mods.wild_chance(), mods.shape_weights(), mods.min_bomb_connections())
 
 
 ## Grows or shrinks the queue to the size the current cards allow.

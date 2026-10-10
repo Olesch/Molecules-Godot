@@ -25,6 +25,7 @@ func _filled(pf: Playfield) -> int:
 
 func _init() -> void:
 	var g = load("res://main.tscn").instantiate()
+	g.config_path = "user://test_danger_config.json" # never read the real settings
 	root.add_child(g)
 	await process_frame
 	g.solo_progress_path = "user://test_danger_progress.json" # never touch the real save

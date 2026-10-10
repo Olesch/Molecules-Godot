@@ -48,15 +48,21 @@ static func from_dict(d) -> Modifiers:
 
 
 func queue_size() -> int:
-	return clampi(4 + count(Cards.LONG_VIEW) - 2 * count(Cards.OVERCLOCK), 2, 8)
+	# The held atom plus the previews: one preview at the start, Long View adds more.
+	return clampi(2 + count(Cards.LONG_VIEW) - count(Cards.OVERCLOCK), 1, 8)
 
 
 func bomb_chance() -> float:
-	return Atoms.BOMB_CHANCE + count(Cards.DEMOLITION) * 0.02 + count(Cards.HOT_POTATO) * 0.08
+	return Atoms.BOMB_CHANCE + count(Cards.DEMOLITION) * 0.05 + count(Cards.HOT_POTATO) * 0.08
+
+
+## Atoms with at least this many connections can be bombs (4 at the start, Mini Bombs lowers it).
+func min_bomb_connections() -> int:
+	return maxi(1, Atoms.BOMB_MIN_CONNECTIONS - count(Cards.MINI_BOMBS))
 
 
 func wild_chance() -> float:
-	return maxf(0.0, Atoms.WILD_CHANCE + count(Cards.JOKER_SUPPLY) * 0.02 - count(Cards.HOT_POTATO) * 0.07)
+	return maxf(0.0, Atoms.WILD_CHANCE + count(Cards.JOKER_SUPPLY) * 0.03 - count(Cards.HOT_POTATO) * 0.07)
 
 
 func shape_weights() -> Array[float]:

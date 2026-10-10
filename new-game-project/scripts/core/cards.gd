@@ -10,6 +10,7 @@ static func _d(n: String, r: int, mx: int, desc: String, versus := false, risky 
 
 const LONG_VIEW := "long_view"
 const DEMOLITION := "demolition"
+const MINI_BOMBS := "mini_bombs"
 const JOKER_SUPPLY := "joker_supply"
 const HIGH_SCORER := "high_scorer"
 const HEAVY_HITTER := "heavy_hitter"
@@ -39,9 +40,10 @@ const _R := Rarity.RARE
 const _S := Rarity.SUPER
 
 static var DEFS: Dictionary = {
-	LONG_VIEW: _d("Long View", _B, 2, "+1 queue atom per level"),
-	DEMOLITION: _d("Demolition", _B, 3, "+2% bomb chance per level"),
-	JOKER_SUPPLY: _d("Joker Supply", _B, 5, "+2% wildcard chance per level"),
+	LONG_VIEW: _d("Long View", _B, 4, "+1 preview atom per level (you start with 1)"),
+	DEMOLITION: _d("Demolition", _B, 3, "+5% bomb chance per level"),
+	MINI_BOMBS: _d("Mini Bombs", _B, 3, "Bombs can also appear on smaller atoms: 3, then 2, then 1 connection (only 4 at the start)"),
+	JOKER_SUPPLY: _d("Joker Supply", _B, 5, "+3% wildcard chance per level (none at the start)"),
 	HIGH_SCORER: _d("High Scorer", _B, 5, "+10% points per level"),
 	HEAVY_HITTER: _d("Heavy Hitter", _B, 5, "+10% attack per level", true),
 	THICK_SKIN: _d("Thick Skin", _B, 2, "Stray landing cap -1 per turn", true),
@@ -60,7 +62,7 @@ static var DEFS: Dictionary = {
 	COUNTERSTRIKE: _d("Counterstrike", _R, 1, "When strays land on you, send 1 back", true),
 	GLASS_CANNON: _d("Glass Cannon", _R, 1, "+50% attack", true, true, "+25% incoming strays (rounded up)"),
 	HOT_POTATO: _d("Hot Potato", _R, 1, "+8% bomb chance", false, true, "-7% wildcard chance"),
-	OVERCLOCK: _d("Overclock", _R, 1, "+15% points", false, true, "Queue shows 2 fewer atoms (min 2)"),
+	OVERCLOCK: _d("Overclock", _R, 1, "+15% points", false, true, "Preview shows 1 fewer atom (none at the start)"),
 	LOOSE_ENDS: _d("Loose Ends", _S, 1, "A molecule of 3+ atoms clears with up to 1 open connection left"),
 	TWO_HAND: _d("Two-Hand", _S, 1, "Hold two atoms and choose: swap current and next"),
 	BIG_GAME: _d("Big Game", _S, 1, "Molecules need 3+ atoms to clear, but score x2", false, false,
