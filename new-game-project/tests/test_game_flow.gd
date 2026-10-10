@@ -22,6 +22,7 @@ func _init() -> void:
 	var g = load("res://main.tscn").instantiate()
 	g.config_path = CONFIG_PATH # never touch the real settings or save
 	g.solo_progress_path = PROGRESS_PATH
+	g.versus_config_path = "user://test_flow_versus.json"
 	root.add_child(g)
 	await process_frame
 	g._solo_progression = Progression.new()
@@ -85,6 +86,16 @@ func _init() -> void:
 	await process_frame
 	await process_frame
 	_check(g._local != null and not g._setup.visible, "Enter on the setup screen starts the game")
+
+	# Hosting: a setup screen with only the match options opens first; nothing is hosted until Start.
+	g._back_to_menu()
+	g._on_menu_choose("host", "")
+	_check(g._host_setup.visible and not g._menu.visible and not g._setup.visible, "Host opens the host setup screen")
+	_check(g._mode == g.Mode.MENU and not g._net.is_peer_connected(), "nothing is hosted before Start")
+	_check(g._host_setup.section_count() == 1 and not g._host_setup.option_buttons("board").is_empty(), "host setup offers the board choice only")
+	_check(g._host_setup.option_buttons("pressure").is_empty(), "solo-only options are not shown when hosting")
+	g._host_setup.back_button().pressed.emit()
+	_check(g._menu.visible and not g._host_setup.visible, "Back from the host setup returns to the menu")
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(CONFIG_PATH))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(PROGRESS_PATH))

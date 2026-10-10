@@ -94,6 +94,7 @@ func _run(addr: String) -> void:
 		g._on_menu_choose("join", addr)
 	else:
 		g._on_menu_choose("host", "")
+		g._host_setup.start_button().pressed.emit() # hosting starts from the host setup screen
 	var ok := await wait_until(func(): return g._mode == VERSUS and g._net != null, 15.0)
 	check("reach VERSUS", ok)
 	if not ok:

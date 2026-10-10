@@ -9,6 +9,8 @@ const SFX_NAMES: Array[String] = [
 const LOCAL_CELL := 72
 const REMOTE_CELL := 40
 const MARGIN := 40.0
+## Setup options that make sense in a versus match (the host picks, the client follows).
+const VERSUS_OPTIONS: Array[String] = ["board"]
 const SOLO_PROGRESS_PATH := "user://solo_progress.json"
 const CONFIG_PATH := "user://game_config.json"
 
@@ -28,6 +30,10 @@ var solo_progress_path := SOLO_PROGRESS_PATH
 var config_path := "user://game_config.json"
 var _config := GameConfig.new() ## last choices from the setup screen
 var _setup: SetupScreen
+var _host_setup: SetupScreen ## the hosting version: only the options that matter for a match
+var versus_config_path := "user://versus_config.json"
+var _versus_config := GameConfig.new() ## the host's last choices
+var _match_config := GameConfig.new() ## options of the running or upcoming versus match
 
 
 func _ready() -> void:
@@ -49,6 +55,7 @@ func _ready() -> void:
 	_net.connected.connect(_on_net_connected)
 	_net.disconnected.connect(_on_net_disconnected)
 	_net.game_start.connect(_on_game_start)
+	_net.options_received.connect(_on_options_received)
 	_net.peer_snapshot.connect(_on_peer_snapshot)
 	_net.peer_attack.connect(_on_peer_attack)
 	_net.peer_lost.connect(_on_peer_lost)
@@ -64,7 +71,19 @@ func _ready() -> void:
 	_setup.started.connect(_on_setup_started)
 	_setup.back.connect(_close_setup)
 	layer.add_child(_setup)
+	_host_setup = SetupScreen.new()
+	_host_setup.title_text = "HOST SETUP"
+	var host_options: Array[Dictionary] = []
+	for option in GameConfig.OPTIONS:
+		if VERSUS_OPTIONS.has(option.id):
+			host_options.append(option)
+	_host_setup.options = host_options
+	_host_setup.visible = false
+	_host_setup.started.connect(_on_host_setup_started)
+	_host_setup.back.connect(_close_setup)
+	layer.add_child(_host_setup)
 	_config = GameConfig.load_from(config_path)
+	_versus_config = GameConfig.load_from(versus_config_path)
 
 	get_viewport().size_changed.connect(_layout)
 	_layout()
@@ -110,9 +129,7 @@ func _make_local(progression: Progression, versus: bool) -> void:
 	_local.interactive = true
 	_local.progression = progression
 	_local.versus = versus
-	_local.config = _config.duplicate_config()
-	if versus:
-		_local.config.set_value("board", "square") # versus is square only
+	_local.config = (_match_config if versus else _config).duplicate_config()
 	add_child(_local)
 	_local.progression_changed.connect(_on_progression_changed)
 	_local.sfx_requested.connect(_play)
@@ -182,9 +199,42 @@ func _open_setup() -> void:
 	_setup.visible = true
 
 
+func _open_host_setup() -> void:
+	_menu.visible = false
+	_host_setup.set_config(_versus_config)
+	_host_setup.visible = true
+
+
 func _close_setup() -> void:
 	_setup.visible = false
+	_host_setup.visible = false
 	_menu.visible = true
+
+
+## The host chose the match options: remember them and start waiting for an opponent.
+func _on_host_setup_started(config: GameConfig) -> void:
+	_versus_config = config.duplicate_config()
+	_versus_config.save_to(versus_config_path)
+	_match_config = _versus_config.duplicate_config()
+	_host_setup.visible = false
+	_menu.visible = true
+	_start_hosting()
+
+
+func _start_hosting() -> void:
+	_net.match_options = _match_config.to_dict()
+	var err := _net.host()
+	if err != OK:
+		_menu.set_status("Could not host (%s). Is the port already in use?" % error_string(err))
+		return
+	_mode = Mode.HOSTING
+	_menu.set_busy(true)
+	_menu.set_status(_menu.get_default_status_for("host"))
+
+
+## Client: the host's options for the match (validated by GameConfig).
+func _on_options_received(options: Dictionary) -> void:
+	_match_config = GameConfig.from_dict(options)
 
 
 func _on_setup_started(config: GameConfig) -> void:
@@ -199,13 +249,7 @@ func _on_menu_choose(mode: String, address: String) -> void:
 		"solo":
 			_open_setup()
 		"host":
-			var err := _net.host()
-			if err != OK:
-				_menu.set_status("Could not host (%s). Is the port already in use?" % error_string(err))
-				return
-			_mode = Mode.HOSTING
-			_menu.set_busy(true)
-			_menu.set_status(_menu.get_default_status_for("host"))
+			_open_host_setup()
 		"join":
 			var err := _net.join(address)
 			if err != OK:
@@ -245,8 +289,12 @@ func _on_game_start(seed_value: int) -> void:
 		return
 	_waiting_for_rematch = false
 	_local.progression = Progression.new() # versus levels only last for one match
+	# Both boards use the host's options (the shape is decided before the board is built).
+	_local.config = _match_config.duplicate_config()
+	_remote.config = _match_config.duplicate_config()
 	_local.start(seed_value)
 	_remote.start(seed_value)
+	_layout()
 	_mixer.restart()
 	_remote.set_overlay("")
 	_local.set_overlay("")

@@ -5,6 +5,7 @@ const MENU := 0
 
 var g: Node
 var role := "host"
+var board := "square" ## the board the host picks; the joiner must end up with the same
 var fails := 0
 var starts: Array = []  # [{seed, hash}] per game_start
 var t_start := 0.0
@@ -15,6 +16,7 @@ func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	role = args[0] if args.size() > 0 else "host"
 	var addr: String = args[1] if args.size() > 1 else "127.0.0.1"
+	board = args[2] if args.size() > 2 else "square"
 	rng.randomize()
 	_run(addr)
 
@@ -80,6 +82,12 @@ func _run(addr: String) -> void:
 		g._on_menu_choose("join", addr)
 	else:
 		g._on_menu_choose("host", "")
+		check("host setup opens first", g._host_setup.visible and g._net.is_host == false)
+		check("host setup offers only the board option", g._host_setup.section_count() == 1 and not g._host_setup.option_buttons("board").is_empty())
+		for b in g._host_setup.option_buttons("board"):
+			if (board == "hex" and b.text == "Hexagonal") or (board == "square" and b.text == "Square"):
+				b.pressed.emit()
+		g._host_setup.start_button().pressed.emit()
 	var ok := await wait_until(func(): return g._mode == VERSUS and g._net != null, 15.0)
 	check("reach VERSUS", ok)
 	if not ok:
@@ -88,6 +96,7 @@ func _run(addr: String) -> void:
 	check("match started", ok)
 	if not ok:
 		return finish()
+	check("both boards use the host's choice (%s)" % board, g._local.topology.id == board and g._remote.topology.id == board and g._local.board.topology.id == board, "local=%s remote=%s" % [g._local.topology.id, g._remote.topology.id])
 	out("seedhash1 %d" % starts[0].hash)
 	check("remote board init equals local init (same seed)", hash(g._remote.board.snapshot()) == starts[0].hash)
 	await wait(1.0)

@@ -14,8 +14,13 @@ signal peer_snapshot(cells: PackedInt32Array)
 signal peer_attack(amount: int)
 signal peer_lost()
 signal game_start(seed: int)
+## The host's match options (e.g. the board shape), emitted on the client just before game_start.
+## Values are plain strings; the receiver validates them (see GameConfig.from_dict).
+signal options_received(options: Dictionary)
 
 var is_host := false
+## Set by the host before a match: sent to the client with every game start (rematches too).
+var match_options := {}
 
 var _peer_id := 0 # remote peer id, 0 when none
 var _host_ready := false
@@ -121,7 +126,7 @@ func _check_start() -> void:
 	while s == _last_seed:
 		s = randi()
 	_last_seed = s
-	_rpc_start.rpc_id(_peer_id, s)
+	_rpc_start.rpc_id(_peer_id, s, match_options)
 	game_start.emit(s)
 
 
@@ -161,9 +166,14 @@ func _rpc_ready() -> void:
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func _rpc_start(s: int) -> void:
+func _rpc_start(s: int, options: Dictionary) -> void:
 	if is_host or not _from_peer():
 		return
+	var clean := {}
+	for key in options:
+		if (key is String or key is StringName) and (options[key] is String):
+			clean[String(key)] = String(options[key])
+	options_received.emit(clean)
 	game_start.emit(s)
 
 
