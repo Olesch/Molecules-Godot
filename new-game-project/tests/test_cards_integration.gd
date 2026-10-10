@@ -105,7 +105,7 @@ func _init() -> void:
 	_check(pf._pending == 3, "attack queues stray atoms")
 	_check(pf._incoming.ghosts.size() == 1, "exactly one incoming stray is announced")
 	var gap: float = pf.mods.incoming_gap_seconds()
-	_check(is_equal_approx(gap, 3.5), "thick skin lengthens the gap (%.1f s)" % gap)
+	_check(is_equal_approx(gap, Danger.INCOMING_BASE_SECONDS + 0.5) and gap > Danger.INCOMING_BASE_SECONDS, "thick skin lengthens the gap (%.1f s)" % gap)
 	pf._queue[0] = Atoms.N
 	pf.try_place(Vector2i(7, 7))
 	var filled := int(round(pf.board.fill_ratio() * 64.0))

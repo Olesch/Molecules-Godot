@@ -4,6 +4,7 @@ extends "res://tests/test_base.gd"
 ## countdown and landed one at a time (at most one per gap). Square and hex boards.
 
 const STEP := 0.05
+const GAP := Danger.INCOMING_BASE_SECONDS
 
 var _attacks := 0
 
@@ -41,24 +42,24 @@ func _suite(board_id: String) -> void:
 	var tag := " [%s]" % board_id
 	var pf := await _make(board_id)
 
-	# One ghost, a full countdown, nothing before 3 s, then exactly one atom.
+	# One ghost, a full countdown, nothing before one gap, then exactly one atom.
 	pf.receive_attack(3)
 	_check(pf._pending == 3, "attack queues 3" + tag)
 	_check(pf._incoming.ghosts.size() == 1 and pf.board.is_empty(pf._incoming.ghosts[0].cell), "exactly one ghost on a free cell" + tag)
-	_check(is_equal_approx(pf._incoming.countdown, 3.0) and pf._incoming.countdown_label() == 3, "countdown is 3 s" + tag)
+	_check(is_equal_approx(pf._incoming.countdown, GAP) and pf._incoming.countdown_label() == ceili(GAP), "countdown starts at one full gap" + tag)
 	pf.receive_attack(1)
-	_check(pf._pending == 4 and pf._incoming.ghosts.size() == 1 and is_equal_approx(pf._incoming.countdown, 3.0), "a second attack queues without restarting the clock" + tag)
+	_check(pf._pending == 4 and pf._incoming.ghosts.size() == 1 and is_equal_approx(pf._incoming.countdown, GAP), "a second attack queues without restarting the clock" + tag)
 	pf._pending = 3
-	_run(pf, 2.9, true)
-	_check(pf._pending == 3 and _filled(pf) == 0, "nothing lands before 3 s" + tag)
+	_run(pf, GAP - 0.1, true)
+	_check(pf._pending == 3 and _filled(pf) == 0, "nothing lands before the gap is over" + tag)
 	_check(pf._incoming.countdown_label() == 1, "label counts down" + tag)
 
 	# Record the landing times of all three atoms.
 	var times: Array[float] = []
-	var t := 2.9
+	var t := GAP - 0.1
 	var pending := pf._pending
 	var multi := false
-	for i in 400:
+	for i in int(GAP * 3.0 / STEP) + 100:
 		for g in pf._incoming.ghosts:
 			g.mask = 1
 		pf._process(STEP)
@@ -70,14 +71,14 @@ func _suite(board_id: String) -> void:
 			pending = pf._pending
 			_check(pf._incoming.ghosts.is_empty() == (pf._pending == 0), "next ghost is announced right after a landing" + tag)
 			if pf._pending > 0:
-				_check(is_equal_approx(pf._incoming.countdown, 3.0), "the next ghost gets a fresh 3 s" + tag)
-		if pending == 0 and t > 10.0:
+				_check(is_equal_approx(pf._incoming.countdown, GAP), "the next ghost gets a fresh full gap" + tag)
+		if pending == 0 and t > GAP * 3.0 + 1.0:
 			break
 	_check(times.size() == 3 and not multi, "three landings, never two at once (%s)" % str(times) + tag)
 	if times.size() == 3:
-		_check(absf(times[0] - 3.0) < 0.12, "first lands after ~3 s" + tag)
-		_check(times[1] - times[0] >= 3.0 - 0.06 and times[2] - times[1] >= 3.0 - 0.06, "landings are at least one gap apart" + tag)
-		_check(absf(times[2] - 9.0) < 0.3, "three atoms take ~9 s" + tag)
+		_check(absf(times[0] - GAP) < 0.12, "first lands after ~one gap" + tag)
+		_check(times[1] - times[0] >= GAP - 0.06 and times[2] - times[1] >= GAP - 0.06, "landings are at least one gap apart" + tag)
+		_check(absf(times[2] - GAP * 3.0) < 0.3, "three atoms take ~three gaps" + tag)
 	_check(_filled(pf) == 3 and pf._stray.size() == 3, "three strays on the board and tracked" + tag)
 	_check(pf._incoming.ghosts.is_empty(), "no ghost once the queue is empty" + tag)
 
@@ -139,7 +140,7 @@ func _suite(board_id: String) -> void:
 	_check(left_before == 1, "setup sanity" + tag)
 
 	# Cards: gap length, Glass Cannon, Counterstrike, Gardener.
-	for combo in [[{}, 3.0], [{"thick_skin": 1}, 3.5], [{"thick_skin": 2}, 4.0], [{"shield": 1}, 4.5], [{"thick_skin": 2, "shield": 1}, 6.0]]:
+	for combo in [[{}, GAP], [{"thick_skin": 1}, GAP + 0.5], [{"thick_skin": 2}, GAP + 1.0], [{"shield": 1}, GAP * 1.5], [{"thick_skin": 2, "shield": 1}, (GAP + 1.0) * 1.5]]:
 		pf = await _make(board_id)
 		for id in combo[0]:
 			for i in int(combo[0][id]):
@@ -160,16 +161,16 @@ func _suite(board_id: String) -> void:
 	pf.progression.mods.add(Cards.COUNTERSTRIKE)
 	pf.receive_attack(2)
 	_attacks = 0
-	_run(pf, 3.2, true)
+	_run(pf, GAP + 0.2, true)
 	_check(_attacks == 1, "Counterstrike sends 1 back per landing" + tag)
-	_run(pf, 3.2, true)
+	_run(pf, GAP + 0.2, true)
 	_check(_attacks == 2 and pf._pending == 0, "...and again for the second" + tag)
 
 	pf = await _make(board_id)
 	pf.progression.mods.add(Cards.GARDENER)
 	pf.receive_attack(1)
 	pf._incoming.ghosts[0].cell = Vector2i(7, 7) # out of the way of the clearing pair
-	_run(pf, 3.2, true)
+	_run(pf, GAP + 0.2, true)
 	_check(pf._stray.size() == 1 and _filled(pf) == 1, "a stray landed" + tag)
 	pf._queue[0] = e
 	pf.try_place(Vector2i(0, 6))

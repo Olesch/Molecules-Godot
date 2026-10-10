@@ -80,7 +80,7 @@ func finish() -> void:
 
 func _run(addr: String) -> void:
 	# global timeout
-	get_tree().create_timer(40.0).timeout.connect(func():
+	get_tree().create_timer(70.0).timeout.connect(func():
 		out("TIMEOUT")
 		quit(1))
 	g = load("res://main.tscn").instantiate()
@@ -121,8 +121,10 @@ func _run(addr: String) -> void:
 		moves += 1
 		await wait(0.05)
 	if role == "join":
-		ok = await wait_until(func(): return g._local._pending < 3, 8.0) # first landing after ~3 s
+		ok = await wait_until(func(): return g._local._pending < 3, 14.0) # first landing after one gap (5 s base)
 		check("pending landed or cancelled", ok, "pending=%d" % g._local._pending)
+	if role == "host":
+		await wait(8.0) # keep the match alive while the joiner waits for the first landing
 	await wait(2.0)
 	# (3) hashes
 	var lh: int = hash(g._local.board.snapshot())
@@ -135,7 +137,7 @@ func _run(addr: String) -> void:
 		g._local._lose()
 		check("host overlay lose", g._local.finished)
 	else:
-		ok = await wait_until(func(): return g._local._overlay_title == "YOU WIN!", 4.0)
+		ok = await wait_until(func(): return g._local._overlay_title == "YOU WIN!", 14.0)
 		check("joiner sees YOU WIN!", ok and g._local.finished, g._local._overlay_title)
 	await wait(1.0)
 

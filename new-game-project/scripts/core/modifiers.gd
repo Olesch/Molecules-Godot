@@ -124,7 +124,8 @@ func big_game_mult() -> float:
 func scaled_attack(molecule_size: int, blasted: int) -> int:
 	if molecule_size <= 0:
 		return 0
-	var raw := Scoring.attack(molecule_size, 0) + blasted * (2 if has(Cards.SALVAGE) else 1)
+	# Atoms wiped by a blast add nothing to the attack, except with Salvage (1 each).
+	var raw := Scoring.attack(molecule_size, 0) + (blasted if has(Cards.SALVAGE) else 0)
 	return int(ceil(raw * attack_mult() - 0.000001))
 
 
