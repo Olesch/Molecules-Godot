@@ -7,7 +7,8 @@ const SFX_NAMES: Array[String] = [
 	"attack", "garbage", "win", "warning",
 ]
 const LOCAL_CELL := 72
-const REMOTE_CELL := 40
+const REMOTE_CELL := 52
+const VERSUS_GAP := 140.0 ## space between the two boards in versus
 const MARGIN := 40.0
 const SOLO_PROGRESS_PATH := "user://solo_progress.json"
 const CONFIG_PATH := "user://game_config.json"
@@ -104,14 +105,18 @@ func _layout() -> void:
 	var size := get_viewport_rect().size
 	if _local:
 		var board_w := _local.board_pixel_size().x
-		if _mode == Mode.VERSUS:
+		if _mode == Mode.VERSUS and _remote:
+			# Both boards as one group, centred, with a fixed gap between them.
+			var total := board_w + VERSUS_GAP + _remote.board_pixel_size().x
+			var left := maxf(MARGIN, (size.x - total) / 2.0)
+			_local.home_position = Vector2(left, Playfield.HEADER)
+			_remote.home_position = Vector2(left + board_w + VERSUS_GAP, Playfield.HEADER + 40)
+			_remote.position = _remote.home_position
+		elif _mode == Mode.VERSUS:
 			_local.home_position = Vector2(MARGIN, Playfield.HEADER)
 		else:
 			_local.home_position = Vector2((size.x - board_w) / 2.0, Playfield.HEADER)
 		_local.position = _local.home_position
-	if _remote:
-		_remote.home_position = Vector2(size.x - MARGIN - _remote.board_pixel_size().x, Playfield.HEADER + 40)
-		_remote.position = _remote.home_position
 	queue_redraw()
 
 

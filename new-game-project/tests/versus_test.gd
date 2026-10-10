@@ -87,7 +87,7 @@ func _run(addr: String) -> void:
 	else:
 		g._on_menu_choose("host", "")
 		check("host setup opens first", g._host_setup.visible and g._net.is_host == false)
-		check("host setup offers the match options", g._host_setup.section_count() == GameConfig.options_for("versus").size() and not g._host_setup.option_buttons("board").is_empty() and not g._host_setup.option_buttons("incoming_seconds").is_empty())
+		check("host setup offers the match options", g._host_setup.section_count() == GameConfig.options_for("versus").size() and not g._host_setup.option_buttons("board").is_empty() and g._host_setup.option_slider("incoming_seconds") != null)
 		check("host setup has no solo pressure option", g._host_setup.option_buttons("pressure").is_empty())
 		check("host setup starts with advanced collapsed", g._host_setup.has_advanced() and not g._host_setup.is_advanced_open())
 		g._host_setup.set_advanced_open(true)
@@ -96,7 +96,7 @@ func _run(addr: String) -> void:
 				b.pressed.emit()
 		for id in picks:
 			var values := GameConfig.choice_values(id)
-			g._host_setup.option_buttons(id)[values.find(picks[id])].pressed.emit()
+			g._host_setup.option_slider(id).value = values.find(picks[id])
 		g._host_setup.start_button().pressed.emit()
 	var ok := await wait_until(func(): return g._mode == VERSUS and g._net != null, 15.0)
 	check("reach VERSUS", ok)
@@ -116,7 +116,7 @@ func _run(addr: String) -> void:
 		if pf.board_w != n_size or pf.board.width != n_size or pf.board.height != n_size or pf.board.blast_radius != 2:
 			same_opts = false
 	check("both playfields use the host's options on the %s side" % role, same_opts, "local=%s remote=%s" % [str(g._local.config.to_dict()), str(g._remote.config.to_dict())])
-	check("sizes: board %dx%d, mirror 320 px wide" % [n_size, n_size], absf(g._remote.board_pixel_size().x - 320.0) < 0.01 and g._local.board.snapshot().size() == n_size * n_size and g._remote.board.snapshot().size() == n_size * n_size)
+	check("sizes: board %dx%d, mirror 416 px wide" % [n_size, n_size], absf(g._remote.board_pixel_size().x - 416.0) < 0.01 and g._local.board.snapshot().size() == n_size * n_size and g._remote.board.snapshot().size() == n_size * n_size)
 	check("queue follows the host's preview option", g._local._queue.size() == 4)
 	check("net session expects the host's board size", g._net.expected_cells == n_size * n_size)
 	out("seedhash1 %d" % starts[0].hash)

@@ -11,7 +11,9 @@ const PRESSURE_NONE := "none"
 ## value (stored), a label (button text) and a help line shown while it is selected.
 ## Optional keys: "advanced" (true: minor option, shown behind the Advanced properties
 ## button), "group" (heading inside the advanced list), "modes" (["solo"] or ["versus"]; no
-## key means both) and "help" (a line shown when a choice has none of its own).
+## key means both), "help" (a line shown when a choice has none of its own) and "widget"
+## ("slider" or "buttons"; without it, options whose choice values are all numbers in
+## ascending order get a slider that snaps to the choices, the rest get a button row).
 ## Numeric options are discrete string choices; read them with get_int() / get_float().
 const OPTIONS: Array[Dictionary] = [
 	{
@@ -357,6 +359,21 @@ static func options_for(mode: String) -> Array[Dictionary]:
 			if bool(option.get("advanced", false)) == advanced and option.get("modes", [mode]).has(mode):
 				result.append(option)
 	return result
+
+
+## True if the setup screen shows the option as a slider over its ordered choices.
+static func uses_slider(option: Dictionary) -> bool:
+	var widget := String(option.get("widget", ""))
+	if widget != "":
+		return widget == "slider"
+	var choices: Array = option.get("choices", [])
+	var previous := -INF
+	for choice in choices:
+		var text := String(choice.value)
+		if not text.is_valid_float() or text.to_float() <= previous:
+			return false
+		previous = text.to_float()
+	return choices.size() >= 3
 
 
 static func choice_values(id: String) -> Array[String]:

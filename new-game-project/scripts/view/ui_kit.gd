@@ -66,3 +66,52 @@ static func segmented_button(text: String, accent: Color) -> Button:
 	b.add_theme_stylebox_override("focus", tight.call(box(Color(0, 0, 0, 0), Palette.TEXT)))
 	b.add_theme_stylebox_override("disabled", tight.call(box(Palette.DISABLED)))
 	return b
+
+
+static func _dot(diameter: int, c: Color, ring: Color) -> ImageTexture:
+	var img := Image.create(diameter, diameter, false, Image.FORMAT_RGBA8)
+	var r := diameter / 2.0
+	for y in diameter:
+		for x in diameter:
+			var d := Vector2(x + 0.5 - r, y + 0.5 - r).length()
+			var col := Color(0, 0, 0, 0)
+			if d <= r - 1.0:
+				col = c if d <= r - 3.0 else ring
+			elif d <= r:
+				col = Color(ring, ring.a * (r - d)) # soft edge
+			img.set_pixel(x, y, col)
+	return ImageTexture.create_from_image(img)
+
+
+## A horizontal slider with a clearly visible track, a filled part up to the grabber and a
+## round grabber, in the dark theme. It snaps to whole steps 0 .. steps-1 and shows a tick per step.
+static func slider(steps: int, accent: Color) -> HSlider:
+	var s := HSlider.new()
+	s.min_value = 0
+	s.max_value = maxi(steps - 1, 1)
+	s.step = 1
+	s.rounded = true
+	s.scrollable = false # the mouse wheel scrolls the page, it must not change the option
+	s.tick_count = steps
+	s.ticks_on_borders = true
+	s.focus_mode = Control.FOCUS_ALL
+	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	s.custom_minimum_size = Vector2(0, 30)
+	var track := StyleBoxFlat.new()
+	track.bg_color = Palette.GRID.lightened(0.15)
+	track.set_corner_radius_all(4)
+	track.content_margin_top = 4 # the track is 8 px tall
+	track.content_margin_bottom = 4
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = accent
+	fill.set_corner_radius_all(4)
+	fill.content_margin_top = 4
+	fill.content_margin_bottom = 4
+	s.add_theme_stylebox_override("slider", track)
+	s.add_theme_stylebox_override("grabber_area", fill)
+	s.add_theme_stylebox_override("grabber_area_highlight", fill)
+	s.add_theme_icon_override("grabber", _dot(26, Palette.TEXT, accent))
+	s.add_theme_icon_override("grabber_highlight", _dot(26, Color.WHITE, accent.lightened(0.2)))
+	s.add_theme_icon_override("grabber_disabled", _dot(26, Palette.DIM, Palette.DISABLED))
+	s.add_theme_icon_override("tick", _dot(8, Palette.DIM, Palette.DIM))
+	return s

@@ -63,6 +63,7 @@ func _run() -> void:
 	_check(not big.has_advanced() and big.advanced_button() == null, "no advanced section when no option is advanced")
 
 	await _advanced_section()
+	await _sliders()
 	_finish()
 
 
@@ -80,13 +81,13 @@ func _advanced_section() -> void:
 	_check(screen.has_advanced() and screen.advanced_button() != null, "an Advanced properties button exists")
 	_check(not screen.is_advanced_open() and screen.visible_section_count() == main_count, "advanced is collapsed by default: only the %d main options show" % main_count)
 	var advanced_id := "bomb_min"
-	_check(not (screen.option_buttons(advanced_id)[0] as Button).is_visible_in_tree(), "an advanced row is hidden while collapsed")
+	_check(not screen.option_slider(advanced_id).is_visible_in_tree(), "an advanced row is hidden while collapsed")
 	var collapsed_h := screen.needed_height()
 	screen.advanced_button().pressed.emit()
 	await process_frame
 	await process_frame
 	_check(screen.is_advanced_open() and screen.visible_section_count() == total, "pressing the button shows every option")
-	_check((screen.option_buttons(advanced_id)[0] as Button).is_visible_in_tree(), "an advanced row is visible when open")
+	_check(screen.option_slider(advanced_id).is_visible_in_tree(), "an advanced row is visible when open")
 	_check(screen.needed_height() <= screen.size.y, "the open screen still fits the window (%.0f of %.0f)" % [screen.needed_height(), screen.size.y])
 	_check(screen.needed_height() >= collapsed_h, "the scroll area grows when opened")
 	screen.advanced_button().pressed.emit()
@@ -96,18 +97,14 @@ func _advanced_section() -> void:
 	# Choices inside the collapsed section still work and are reported.
 	screen.set_advanced_open(true)
 	var values := GameConfig.choice_values("blast_radius")
-	screen.option_buttons("blast_radius")[values.find("2")].pressed.emit()
+	screen.option_slider("blast_radius").value = values.find("2")
 	_check(screen.current_config().get_int("blast_radius") == 2, "an advanced choice changes the config")
 	_check(screen.help_text("blast_radius").contains("2"), "an advanced choice shows its help")
 	var cfg := GameConfig.new()
 	cfg.set_value("incoming_seconds", "12")
 	screen.set_config(cfg)
-	var pressed_ok := true
 	var inc_values := GameConfig.choice_values("incoming_seconds")
-	for i in inc_values.size():
-		if screen.option_buttons("incoming_seconds")[i].button_pressed != (inc_values[i] == "12"):
-			pressed_ok = false
-	_check(pressed_ok and screen.current_config().get_int("blast_radius") == 1, "set_config highlights saved advanced values")
+	_check(int(screen.option_slider("incoming_seconds").value) == inc_values.find("12") and screen.current_config().get_int("blast_radius") == 1, "set_config moves the sliders to the saved values")
 	screen.queue_free()
 
 	# A versus-only screen (what the host sees) lists the shared and the versus options.
@@ -116,10 +113,43 @@ func _advanced_section() -> void:
 	root.add_child(host)
 	await process_frame
 	await process_frame
-	_check(host.option_buttons("pressure").is_empty() and not host.option_buttons("board").is_empty() and not host.option_buttons("attack_points").is_empty(), "host screen: no solo pressure, has board and versus options")
+	_check(host.option_slider("pressure") == null and host.option_buttons("pressure").is_empty() and not host.option_buttons("board").is_empty() and host.option_slider("attack_points") != null, "host screen: no solo pressure, has board and versus options")
 	_check(host.has_advanced() and not host.is_advanced_open(), "host screen: advanced is collapsed")
 	host.set_advanced_open(true)
 	await process_frame
 	await process_frame
 	_check(host.needed_height() <= host.size.y, "the open host screen fits the window")
+	for id in ["board_size", "bombs", "incoming_seconds"]:
+		_check(host.option_slider(id) != null, "host screen lists %s" % id)
 	host.queue_free()
+
+
+## Numeric options with ordered choices are sliders that snap to the choice list.
+func _sliders() -> void:
+	_check(GameConfig.uses_slider(GameConfig.option_def("bombs")) and GameConfig.uses_slider(GameConfig.option_def("double_level")), "numeric ordered options use sliders")
+	_check(not GameConfig.uses_slider(GameConfig.option_def("pressure")) and not GameConfig.uses_slider(GameConfig.option_def("board")), "categorical options stay buttons")
+	_check(GameConfig.uses_slider({"choices": [{"value": "a"}, {"value": "b"}], "widget": "slider"}) and not GameConfig.uses_slider({"choices": [{"value": "1"}, {"value": "2"}, {"value": "3"}], "widget": "buttons"}), "the widget key overrides the detection")
+	var screen := SetupScreen.new()
+	root.add_child(screen)
+	await process_frame
+	await process_frame
+	var slider := screen.option_slider("bombs")
+	var values := GameConfig.choice_values("bombs")
+	_check(slider != null and screen.option_buttons("bombs").is_empty(), "bombs is a slider, not buttons")
+	_check(slider.min_value == 0 and slider.max_value == values.size() - 1 and slider.step == 1, "the slider steps through the choice indices")
+	_check(int(slider.value) == values.find("0.35"), "the slider starts on the default choice")
+	var before := screen.help_text("bombs")
+	slider.value = values.find("0.6")
+	_check(screen.current_config().get_value("bombs") == "0.6", "moving the slider writes the choice value")
+	_check(screen.help_text("bombs") != before and screen.help_text("bombs").contains("60%"), "the help line follows the slider")
+	slider.value = values.size() + 3 # out of range clamps to the last choice
+	_check(screen.current_config().get_value("bombs") == values[values.size() - 1], "the slider cannot leave the choice list")
+	_check(screen.choose("bombs", "0") and int(slider.value) == 0 and screen.current_config().get_value("bombs") == "0", "choose() moves the slider")
+	_check(not screen.choose("bombs", "7"), "choose() rejects a value that is not offered")
+	var cfg := GameConfig.new()
+	cfg.set_value("bombs", "0.15")
+	screen.set_config(cfg)
+	_check(int(slider.value) == values.find("0.15"), "set_config moves the slider")
+	_check(screen.option_slider("pressure") == null and screen.option_slider("nope") == null, "buttons options and unknown ids have no slider")
+	_check(screen.needed_height() <= screen.size.y, "the collapsed screen fits the window without scrolling (%.0f of %.0f)" % [screen.needed_height(), screen.size.y])
+	screen.queue_free()

@@ -6,7 +6,9 @@ extends Control
 signal started(config: GameConfig)
 signal back
 
-const COLUMN_W := 420.0
+const OPTION_W := 600.0 ## width of one option cell; the options sit in two columns
+const GAP_X := 48
+const COLUMN_W := OPTION_W * 2.0 + GAP_X + 16.0 ## both columns plus room for the scrollbar
 
 var title_text := "SOLO SETUP"
 ## The option schema to build rows from; set before adding to the tree.
@@ -15,12 +17,14 @@ var options: Array[Dictionary] = GameConfig.OPTIONS
 var _config := GameConfig.new()
 var _title: Label
 var _content: VBoxContainer
+var _main_grid: GridContainer
 var _advanced_box: VBoxContainer ## the advanced options; hidden until the toggle is pressed
+var _advanced_grid: GridContainer ## the grid of the current group inside _advanced_box
 var _advanced_btn: Button
 var _scroll: ScrollContainer
 var _start_btn: Button
 var _back_btn: Button
-## One entry per option: {id, choices, buttons: Array[Button], help: Label}
+## One entry per option: {id, choices, buttons: Array[Button], slider: HSlider or null, value_label, help: Label}
 var _rows: Array[Dictionary] = []
 var _built := false
 
@@ -47,7 +51,7 @@ func _build() -> void:
 
 	var column := VBoxContainer.new()
 	column.custom_minimum_size = Vector2(COLUMN_W, 0)
-	column.add_theme_constant_override("separation", 12)
+	column.add_theme_constant_override("separation", 8)
 	center.add_child(column)
 
 	_title = Label.new()
@@ -64,18 +68,19 @@ func _build() -> void:
 	column.add_child(_scroll)
 
 	_content = VBoxContainer.new()
-	_content.custom_minimum_size = Vector2(COLUMN_W - 12, 0)
+	_content.custom_minimum_size = Vector2(COLUMN_W - 16.0, 0)
 	_content.add_theme_constant_override("separation", 8)
 	_scroll.add_child(_content)
 	_content.minimum_size_changed.connect(_fit_scroll)
 	resized.connect(_fit_scroll)
 
+	_main_grid = _new_grid(_content)
 	var advanced: Array[Dictionary] = []
 	for option in options:
 		if option.get("advanced", false):
 			advanced.append(option)
 		else:
-			_add_section(option, _content)
+			_add_section(option, _main_grid)
 	if not advanced.is_empty():
 		UiKit.spacer(_content, 6)
 		_advanced_btn = UiKit.make_button("", Palette.DIM.darkened(0.4))
@@ -87,12 +92,12 @@ func _build() -> void:
 		_advanced_box.add_theme_constant_override("separation", 8)
 		_advanced_box.visible = false
 		_content.add_child(_advanced_box)
-		var group := ""
+		var group: Variant = null # null: no heading yet, so the first option opens a grid
 		for option in advanced:
 			if option.get("group", "") != group:
 				group = option.get("group", "")
-				_add_group_heading(group)
-			_add_section(option, _advanced_box)
+				_add_group_heading(String(group))
+			_add_section(option, _advanced_grid)
 		_update_advanced_button()
 
 	UiKit.spacer(column, 10)
@@ -107,47 +112,76 @@ func _build() -> void:
 	_fit_scroll.call_deferred()
 
 
+func _new_grid(parent: Control) -> GridContainer:
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", GAP_X)
+	grid.add_theme_constant_override("v_separation", 14)
+	parent.add_child(grid)
+	return grid
+
+
+## A full-width group heading; the options after it go into a fresh two-column grid.
 func _add_group_heading(text: String) -> void:
-	if text == "":
-		return
-	UiKit.spacer(_advanced_box, 8)
-	var heading := Label.new()
-	heading.text = text.to_upper()
-	heading.add_theme_font_size_override("font_size", 16)
-	heading.add_theme_color_override("font_color", Palette.GOLD)
-	_advanced_box.add_child(heading)
+	if _advanced_box.get_child_count() > 0:
+		UiKit.spacer(_advanced_box, 8)
+	if text != "":
+		var heading := Label.new()
+		heading.text = text.to_upper()
+		heading.add_theme_font_size_override("font_size", 16)
+		heading.add_theme_color_override("font_color", Palette.GOLD)
+		_advanced_box.add_child(heading)
+	_advanced_grid = _new_grid(_advanced_box)
 
 
-func _add_section(option: Dictionary, parent: Control) -> void:
-	if parent.get_child_count() > 0:
-		UiKit.spacer(parent, 10)
+## One option as a cell of the grid: label (and the current choice for sliders), the control, the help line.
+func _add_section(option: Dictionary, grid: GridContainer) -> void:
+	var cell := VBoxContainer.new()
+	cell.custom_minimum_size = Vector2(OPTION_W, 0)
+	cell.add_theme_constant_override("separation", 4)
+	grid.add_child(cell)
+	var id := String(option.id)
+	var as_slider := GameConfig.uses_slider(option)
+
+	var head := HBoxContainer.new()
+	cell.add_child(head)
 	var label := Label.new()
 	label.text = String(option.label).to_upper()
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.add_theme_font_size_override("font_size", 13)
 	label.add_theme_color_override("font_color", Palette.DIM)
-	parent.add_child(label)
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-	parent.add_child(row)
-	var group := ButtonGroup.new()
+	head.add_child(label)
+	var value_label: Label = null
+	var slider: HSlider = null
 	var buttons: Array[Button] = []
-	var id := String(option.id)
-	for choice in option.choices:
-		var b := UiKit.segmented_button(String(choice.label), Palette.GOOD)
-		b.button_group = group
-		var value := String(choice.value)
-		b.pressed.connect(func() -> void: _on_choice(id, value))
-		row.add_child(b)
-		buttons.append(b)
+	if as_slider:
+		value_label = Label.new()
+		value_label.add_theme_font_size_override("font_size", 16)
+		value_label.add_theme_color_override("font_color", Palette.GOLD)
+		head.add_child(value_label)
+		slider = UiKit.slider(option.choices.size(), Palette.GOOD)
+		slider.value_changed.connect(func(v: float) -> void: _on_choice(id, String(option.choices[int(v)].value)))
+		cell.add_child(slider)
+	else:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		cell.add_child(row)
+		var group := ButtonGroup.new()
+		for choice in option.choices:
+			var b := UiKit.segmented_button(String(choice.label), Palette.GOOD)
+			b.button_group = group
+			var value := String(choice.value)
+			b.pressed.connect(func() -> void: _on_choice(id, value))
+			row.add_child(b)
+			buttons.append(b)
 
 	var help := Label.new()
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	help.custom_minimum_size = Vector2(COLUMN_W - 12, 0)
+	help.custom_minimum_size = Vector2(OPTION_W, 40) # two lines, so the grid does not jump
 	help.add_theme_font_size_override("font_size", 14)
 	help.add_theme_color_override("font_color", Color(Palette.TEXT, 0.6))
-	parent.add_child(help)
-	_rows.append({"id": id, "default": String(option.default), "choices": option.choices, "buttons": buttons, "help": help, "option_help": String(option.get("help", ""))})
+	cell.add_child(help)
+	_rows.append({"id": id, "default": String(option.default), "choices": option.choices, "buttons": buttons, "slider": slider, "value_label": value_label, "help": help, "option_help": String(option.get("help", ""))})
 
 
 func _fit_scroll() -> void:
@@ -223,6 +257,27 @@ func needed_height() -> float:
 	return _title.get_combined_minimum_size().y + 20.0 + _scroll.custom_minimum_size.y + 20.0 + _start_btn.get_combined_minimum_size().y + _back_btn.get_combined_minimum_size().y + 36.0
 
 
+## The slider of a numeric option (null for options shown as a button row).
+func option_slider(id: String) -> HSlider:
+	_build()
+	for r in _rows:
+		if r.id == id:
+			return r.slider
+	return null
+
+
+## Picks a choice by value whatever widget the option uses; false if it is not offered.
+func choose(id: String, value: String) -> bool:
+	_build()
+	for r in _rows:
+		if r.id == id:
+			for i in r.choices.size():
+				if String(r.choices[i].value) == value:
+					_on_choice(id, value)
+					return true
+	return false
+
+
 func option_buttons(id: String) -> Array[Button]:
 	_build()
 	for r in _rows:
@@ -258,7 +313,12 @@ func _refresh() -> void:
 		for i in r.choices.size():
 			var choice: Dictionary = r.choices[i]
 			var on := String(choice.value) == current
-			(r.buttons[i] as Button).set_pressed_no_signal(on)
+			if r.slider != null:
+				if on:
+					(r.slider as HSlider).set_value_no_signal(i)
+					(r.value_label as Label).text = String(choice.label)
+			else:
+				(r.buttons[i] as Button).set_pressed_no_signal(on)
 			if on:
 				(r.help as Label).text = String(choice.get("help", r.option_help))
 
