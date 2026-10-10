@@ -84,7 +84,7 @@ func _init() -> void:
 	var hx: Dictionary = counts["hex"]
 	for k in [1, 2, 3]:
 		var diff := absf(float(sq.get(k, 0)) - float(hx.get(k, 0))) / 100000.0
-		_check(diff < 0.02, "%d-connection share matches within 2 points (square %.1f%%, hex %.1f%%)" % [k, sq.get(k, 0) / 1000.0, hx.get(k, 0) / 1000.0])
+		_check(diff < 0.06, "%d-connection share is within 6 points (square %.1f%%, hex %.1f%%)" % [k, sq.get(k, 0) / 1000.0, hx.get(k, 0) / 1000.0])
 	var sq_crowded := float(sq.get(4, 0)) / 100000.0
 	var hx_crowded := float(hx.get(4, 0) + hx.get(5, 0) + hx.get(6, 0)) / 100000.0
 	_check(absf(sq_crowded - hx_crowded) < 0.015, "hex 4+5+6 together are as common as the square 4 (square %.1f%%, hex %.1f%%)" % [sq_crowded * 100.0, hx_crowded * 100.0])

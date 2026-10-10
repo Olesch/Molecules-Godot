@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 820" width="920" height="820" font-family="Segoe UI, Arial, sans-serif">
+<rect width="920" height="820" fill="#1e2229"/>
+<text x="20" y="34" fill="#e8ecf1" font-size="22" font-weight="bold">Hexagonal atoms: all 11 shapes (rotatable in 6 steps)</text>
+<text x="20" y="56" fill="#8f98a8" font-size="13">Spawn share in brackets. Bombs: 4+ connections only. A bond forms only when both atoms point at each other.</text>
+<polygon points="168.7,139.0 168.7,201.0 115.0,232.0 61.3,201.0 61.3,139.0 115.0,108.0" fill="#2a303a" stroke="#353b46" stroke-width="2"/>
+<line x1="115.0" y1="170" x2="168.9" y2="170.0" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="193.0" y="174.0" fill="#8f98a8" font-size="11" text-anchor="middle">E</text>
+<circle cx="115.0" cy="170" r="13" fill="#e8ecf1"/>
+<text x="115.0" y="175" fill="#1e2229" font-size="14" font-weight="bold" text-anchor="middle">1</text>
+<text x="115.0" y="276" fill="#e8ecf1" font-size="15" font-weight="bold" text-anchor="middle">Single</text>
+<text x="115.0" y="294" fill="#8f98a8" font-size="12" text-anchor="middle">weight 1.5 (22.7%)</text>
+<polygon points="398.7,139.0 398.7,201.0 345.0,232.0 291.3,201.0 291.3,139.0 345.0,108.0" fill="#2a303a" stroke="#353b46" stroke-width="2"/>
+<line x1="345.0" y1="170" x2="398.9" y2="170.0" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="423.0" y="174.0" fill="#8f98a8" font-size="11" text-anchor="middle">E</text>
+<line x1="345.0" y1="170" x2="291.1" y2="170.0" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="267.0" y="174.0" fill="#8f98a8" font-size="11" text-anchor="middle">W</text>
+<circle cx="345.0" cy="170" r="13" fill="#e8ecf1"/>
+<text x="345.0" y="175" fill="#1e2229" font-size="14" font-weight="bold" text-anchor="middle">2</text>
+<text x="345.0" y="276" fill="#e8ecf1" font-size="15" font-weight="bold" text-anchor="middle">Straight</text>
+<text x="345.0" y="294" fill="#8f98a8" font-size="12" text-anchor="middle">weight 1.0 (15.1%)</text>
+<polygon points="628.7,139.0 628.7,201.0 575.0,232.0 521.3,201.0 521.3,139.0 575.0,108.0" fill="#2a303a" stroke="#353b46" stroke-width="2"/>
+<line x1="575.0" y1="170" x2="628.9" y2="170.0" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="653.0" y="174.0" fill="#8f98a8" font-size="11" text-anchor="middle">E</text>
+<line x1="575.0" y1="170" x2="548.0" y2="216.7" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="536.0" y="241.5" fill="#8f98a8" font-size="11" text-anchor="middle">SW</text>
+<circle cx="575.0" cy="170" r="13" fill="#e8ecf1"/>
+<text x="575.0" y="175" fill="#1e2229" font-size="14" font-weight="bold" text-anchor="middle">2</text>
+<text x="575.0" y="276" fill="#e8ecf1" font-size="15" font-weight="bold" text-anchor="middle">Wide bend</text>
+<text x="575.0" y="294" fill="#8f98a8" font-size="12" text-anchor="middle">weight 1.2 (18.2%)</text>
+<polygon points="858.7,139.0 858.7,201.0 805.0,232.0 751.3,201.0 751.3,139.0 805.0,108.0" fill="#2a303a" stroke="#353b46" stroke-width="2"/>
+<line x1="805.0" y1="170" x2="858.9" y2="170.0" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="883.0" y="174.0" fill="#8f98a8" font-size="11" text-anchor="middle">E</text>
+<line x1="805.0" y1="170" x2="832.0" y2="216.7" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="844.0" y="241.5" fill="#8f98a8" font-size="11" text-anchor="middle">SE</text>
+<circle cx="805.0" cy="170" r="13" fill="#e8ecf1"/>
+<text x="805.0" y="175" fill="#1e2229" font-size="14" font-weight="bold" text-anchor="middle">2</text>
+<text x="805.0" y="276" fill="#e8ecf1" font-size="15" font-weight="bold" text-anchor="middle">Sharp bend</text>
+<text x="805.0" y="294" fill="#8f98a8" font-size="12" text-anchor="middle">weight 1.5 (22.7%)</text>
+<polygon points="168.7,389.0 168.7,451.0 115.0,482.0 61.3,451.0 61.3,389.0 115.0,358.0" fill="#2a303a" stroke="#353b46" stroke-width="2"/>
+<line x1="115.0" y1="420" x2="168.9" y2="420.0" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="193.0" y="424.0" fill="#8f98a8" font-size="11" text-anchor="middle">E</text>
+<line x1="115.0" y1="420" x2="88.0" y2="466.7" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="76.0" y="491.5" fill="#8f98a8" font-size="11" text-anchor="middle">SW</text>
+<line x1="115.0" y1="420" x2="88.0" y2="373.3" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="76.0" y="356.5" fill="#8f98a8" font-size="11" text-anchor="middle">NW</text>
+<circle cx="115.0" cy="420" r="13" fill="#e8ecf1"/>
+<text x="115.0" y="425" fill="#1e2229" font-size="14" font-weight="bold" text-anchor="middle">3</text>
+<text x="115.0" y="526" fill="#e8ecf1" font-size="15" font-weight="bold" text-anchor="middle">Y</text>
+<text x="115.0" y="544" fill="#8f98a8" font-size="12" text-anchor="middle">weight 0.3 (4.5%)</text>
+<polygon points="398.7,389.0 398.7,451.0 345.0,482.0 291.3,451.0 291.3,389.0 345.0,358.0" fill="#2a303a" stroke="#353b46" stroke-width="2"/>
+<line x1="345.0" y1="420" x2="398.9" y2="420.0" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="423.0" y="424.0" fill="#8f98a8" font-size="11" text-anchor="middle">E</text>
+<line x1="345.0" y1="420" x2="372.0" y2="466.7" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="384.0" y="491.5" fill="#8f98a8" font-size="11" text-anchor="middle">SE</text>
+<line x1="345.0" y1="420" x2="318.0" y2="466.7" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="306.0" y="491.5" fill="#8f98a8" font-size="11" text-anchor="middle">SW</text>
+<circle cx="345.0" cy="420" r="13" fill="#e8ecf1"/>
+<text x="345.0" y="425" fill="#1e2229" font-size="14" font-weight="bold" text-anchor="middle">3</text>
+<text x="345.0" y="526" fill="#e8ecf1" font-size="15" font-weight="bold" text-anchor="middle">Fan</text>
+<text x="345.0" y="544" fill="#8f98a8" font-size="12" text-anchor="middle">weight 0.4 (6.1%)</text>
+<polygon points="628.7,389.0 628.7,451.0 575.0,482.0 521.3,451.0 521.3,389.0 575.0,358.0" fill="#2a303a" stroke="#353b46" stroke-width="2"/>
+<line x1="575.0" y1="420" x2="628.9" y2="420.0" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="653.0" y="424.0" fill="#8f98a8" font-size="11" text-anchor="middle">E</text>
+<line x1="575.0" y1="420" x2="602.0" y2="466.7" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="614.0" y="491.5" fill="#8f98a8" font-size="11" text-anchor="middle">SE</text>
+<line x1="575.0" y1="420" x2="521.1" y2="420.0" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="497.0" y="424.0" fill="#8f98a8" font-size="11" text-anchor="middle">W</text>
+<circle cx="575.0" cy="420" r="13" fill="#e8ecf1"/>
+<text x="575.0" y="425" fill="#1e2229" font-size="14" font-weight="bold" text-anchor="middle">3</text>
+<text x="575.0" y="526" fill="#e8ecf1" font-size="15" font-weight="bold" text-anchor="middle">T</text>
+<text x="575.0" y="544" fill="#8f98a8" font-size="12" text-anchor="middle">weight 0.3 (4.5%)</text>
+<polygon points="858.7,389.0 858.7,451.0 805.0,482.0 751.3,451.0 751.3,389.0 805.0,358.0" fill="#2a303a" stroke="#353b46" stroke-width="2"/>
+<line x1="805.0" y1="420" x2="858.9" y2="420.0" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="883.0" y="424.0" fill="#8f98a8" font-size="11" text-anchor="middle">E</text>
+<line x1="805.0" y1="420" x2="832.0" y2="466.7" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="844.0" y="491.5" fill="#8f98a8" font-size="11" text-anchor="middle">SE</text>
+<line x1="805.0" y1="420" x2="751.1" y2="420.0" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="727.0" y="424.0" fill="#8f98a8" font-size="11" text-anchor="middle">W</text>
+<line x1="805.0" y1="420" x2="778.0" y2="373.3" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="766.0" y="356.5" fill="#8f98a8" font-size="11" text-anchor="middle">NW</text>
+<circle cx="805.0" cy="420" r="13" fill="#e8ecf1"/>
+<text x="805.0" y="425" fill="#1e2229" font-size="14" font-weight="bold" text-anchor="middle">4</text>
+<text x="805.0" y="526" fill="#e8ecf1" font-size="15" font-weight="bold" text-anchor="middle">Four arms A</text>
+<text x="805.0" y="544" fill="#8f98a8" font-size="12" text-anchor="middle">weight 0.14 (2.1%)</text>
+<polygon points="168.7,639.0 168.7,701.0 115.0,732.0 61.3,701.0 61.3,639.0 115.0,608.0" fill="#2a303a" stroke="#353b46" stroke-width="2"/>
+<line x1="115.0" y1="670" x2="168.9" y2="670.0" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="193.0" y="674.0" fill="#8f98a8" font-size="11" text-anchor="middle">E</text>
+<line x1="115.0" y1="670" x2="142.0" y2="716.7" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="154.0" y="741.5" fill="#8f98a8" font-size="11" text-anchor="middle">SE</text>
+<line x1="115.0" y1="670" x2="88.0" y2="716.7" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="76.0" y="741.5" fill="#8f98a8" font-size="11" text-anchor="middle">SW</text>
+<line x1="115.0" y1="670" x2="88.0" y2="623.3" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="76.0" y="606.5" fill="#8f98a8" font-size="11" text-anchor="middle">NW</text>
+<circle cx="115.0" cy="670" r="13" fill="#e8ecf1"/>
+<text x="115.0" y="675" fill="#1e2229" font-size="14" font-weight="bold" text-anchor="middle">4</text>
+<text x="115.0" y="776" fill="#e8ecf1" font-size="15" font-weight="bold" text-anchor="middle">Four arms B</text>
+<text x="115.0" y="794" fill="#8f98a8" font-size="12" text-anchor="middle">weight 0.14 (2.1%)</text>
+<polygon points="398.7,639.0 398.7,701.0 345.0,732.0 291.3,701.0 291.3,639.0 345.0,608.0" fill="#2a303a" stroke="#353b46" stroke-width="2"/>
+<line x1="345.0" y1="670" x2="398.9" y2="670.0" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="423.0" y="674.0" fill="#8f98a8" font-size="11" text-anchor="middle">E</text>
+<line x1="345.0" y1="670" x2="372.0" y2="716.7" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="384.0" y="741.5" fill="#8f98a8" font-size="11" text-anchor="middle">SE</text>
+<line x1="345.0" y1="670" x2="318.0" y2="716.7" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="306.0" y="741.5" fill="#8f98a8" font-size="11" text-anchor="middle">SW</text>
+<line x1="345.0" y1="670" x2="291.1" y2="670.0" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="267.0" y="674.0" fill="#8f98a8" font-size="11" text-anchor="middle">W</text>
+<line x1="345.0" y1="670" x2="318.0" y2="623.3" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="306.0" y="606.5" fill="#8f98a8" font-size="11" text-anchor="middle">NW</text>
+<circle cx="345.0" cy="670" r="13" fill="#e8ecf1"/>
+<text x="345.0" y="675" fill="#1e2229" font-size="14" font-weight="bold" text-anchor="middle">5</text>
+<text x="345.0" y="776" fill="#e8ecf1" font-size="15" font-weight="bold" text-anchor="middle">Five arms</text>
+<text x="345.0" y="794" fill="#8f98a8" font-size="12" text-anchor="middle">weight 0.08 (1.2%)</text>
+<polygon points="628.7,639.0 628.7,701.0 575.0,732.0 521.3,701.0 521.3,639.0 575.0,608.0" fill="#2a303a" stroke="#353b46" stroke-width="2"/>
+<line x1="575.0" y1="670" x2="628.9" y2="670.0" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="653.0" y="674.0" fill="#8f98a8" font-size="11" text-anchor="middle">E</text>
+<line x1="575.0" y1="670" x2="602.0" y2="716.7" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="614.0" y="741.5" fill="#8f98a8" font-size="11" text-anchor="middle">SE</text>
+<line x1="575.0" y1="670" x2="548.0" y2="716.7" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="536.0" y="741.5" fill="#8f98a8" font-size="11" text-anchor="middle">SW</text>
+<line x1="575.0" y1="670" x2="521.1" y2="670.0" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="497.0" y="674.0" fill="#8f98a8" font-size="11" text-anchor="middle">W</text>
+<line x1="575.0" y1="670" x2="548.0" y2="623.3" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="536.0" y="606.5" fill="#8f98a8" font-size="11" text-anchor="middle">NW</text>
+<line x1="575.0" y1="670" x2="602.0" y2="623.3" stroke="#4a90d9" stroke-width="7" stroke-linecap="round"/>
+<text x="614.0" y="606.5" fill="#8f98a8" font-size="11" text-anchor="middle">NE</text>
+<circle cx="575.0" cy="670" r="13" fill="#e8ecf1"/>
+<text x="575.0" y="675" fill="#1e2229" font-size="14" font-weight="bold" text-anchor="middle">6</text>
+<text x="575.0" y="776" fill="#e8ecf1" font-size="15" font-weight="bold" text-anchor="middle">Star</text>
+<text x="575.0" y="794" fill="#8f98a8" font-size="12" text-anchor="middle">weight 0.05 (0.8%)</text>
+</svg>
