@@ -35,8 +35,12 @@ var finished := false
 ## games, versus starts everyone fresh each match.
 var progression := Progression.new()
 var versus := false
-## Solo flavour: stray atoms drop on a clock instead of every few placements.
-var timed := false
+## The options picked on the setup screen (pressure mode, and whatever is added later).
+var config := GameConfig.new()
+## Solo pressure flavour: stray atoms drop on a clock instead of every few placements.
+var timed: bool:
+	get:
+		return config.pressure() == GameConfig.PRESSURE_TIMED
 var mods: Modifiers:
 	get:
 		return progression.mods
@@ -294,9 +298,9 @@ func try_place(p: Vector2i) -> void:
 	_maybe_offer()
 
 
-## Solo only: versus has the opponent for pressure.
+## Solo only (versus has the opponent for pressure), and not in Relaxed mode.
 func _danger_active() -> bool:
-	return interactive and not versus
+	return interactive and not versus and config.pressure() != GameConfig.PRESSURE_NONE
 
 
 ## One placement passed: move a ghost you built over, then drop what is due.

@@ -9,7 +9,7 @@ func _init() -> void:
 	await process_frame
 	g.solo_progress_path = "user://test_solo_progress.json" # never touch the real save
 	g._solo_progression = Progression.new()
-	g._on_menu_choose("solo", "")
+	g._start_solo()
 	await process_frame
 	await process_frame
 	var pf: Playfield = g._local

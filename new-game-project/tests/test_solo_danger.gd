@@ -29,7 +29,7 @@ func _init() -> void:
 	await process_frame
 	g.solo_progress_path = "user://test_danger_progress.json" # never touch the real save
 	g._solo_progression = Progression.new()
-	g._on_menu_choose("solo", "")
+	g._start_solo()
 	await process_frame
 	await process_frame
 	var pf: Playfield = g._local
@@ -93,7 +93,7 @@ func _init() -> void:
 
 	# Timed flavour on a real playfield: the clock runs the drop, a card pick pauses it.
 	pf.versus = false
-	pf.timed = true
+	pf.config.set_value("pressure", GameConfig.PRESSURE_TIMED)
 	pf.progression.level = 1
 	pf.board = Board.new(8, 8)
 	pf._danger.timed = true
@@ -119,7 +119,14 @@ func _init() -> void:
 	_check(pf.board.get_atom(announced_cell) == announced_mask and _filled(pf) == fill_before + 1, "the announced stray lands when the time is up")
 	var level_now: int = pf.progression.level # the XP above leveled the player up
 	_check(pf._danger.ghosts.size() == Danger.spawn_count(level_now) and is_equal_approx(pf._danger.countdown, Danger.seconds(level_now)), "the next timed stray is announced with the new level's gap")
-	pf.timed = false
+	pf.config.set_value("pressure", GameConfig.PRESSURE_TURNS)
+
+	# Relaxed: no strays at all.
+	pf.config.set_value("pressure", GameConfig.PRESSURE_NONE)
+	_check(not pf._danger_active(), "relaxed mode has no danger")
+	pf.start(7)
+	_check(pf._danger.ghosts.is_empty(), "relaxed games announce no strays")
+	pf.config.set_value("pressure", GameConfig.PRESSURE_TURNS)
 
 	# Versus has no solo danger.
 	pf.versus = true

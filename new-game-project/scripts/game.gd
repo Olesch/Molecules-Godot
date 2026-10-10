@@ -10,6 +10,7 @@ const LOCAL_CELL := 72
 const REMOTE_CELL := 40
 const MARGIN := 40.0
 const SOLO_PROGRESS_PATH := "user://solo_progress.json"
+const CONFIG_PATH := "user://game_config.json"
 
 enum Mode { MENU, SOLO, HOSTING, JOINING, VERSUS }
 
@@ -24,6 +25,9 @@ var _sfx_rng := RandomNumberGenerator.new()
 var _waiting_for_rematch := false
 var _solo_progression: Progression
 var solo_progress_path := SOLO_PROGRESS_PATH
+var config_path := "user://game_config.json"
+var _config := GameConfig.new() ## last choices from the setup screen
+var _setup: SetupScreen
 
 
 func _ready() -> void:
@@ -55,6 +59,12 @@ func _ready() -> void:
 	_menu = Menu.new()
 	_menu.choose.connect(_on_menu_choose)
 	layer.add_child(_menu)
+	_setup = SetupScreen.new()
+	_setup.visible = false
+	_setup.started.connect(_on_setup_started)
+	_setup.back.connect(_close_setup)
+	layer.add_child(_setup)
+	_config = GameConfig.load_from(config_path)
 
 	get_viewport().size_changed.connect(_layout)
 	_layout()
@@ -93,14 +103,14 @@ func _layout() -> void:
 
 # --- Sessions ---------------------------------------------------------------
 
-func _make_local(progression: Progression, versus: bool, timed := false) -> void:
+func _make_local(progression: Progression, versus: bool) -> void:
 	_free_playfields()
 	_local = Playfield.new()
 	_local.cell_size = LOCAL_CELL
 	_local.interactive = true
 	_local.progression = progression
 	_local.versus = versus
-	_local.timed = timed
+	_local.config = _config.duplicate_config()
 	add_child(_local)
 	_local.progression_changed.connect(_on_progression_changed)
 	_local.sfx_requested.connect(_play)
@@ -123,12 +133,12 @@ func _process(_delta: float) -> void:
 	_mixer.set_fill(fill)
 
 
-func _start_solo(timed := false) -> void:
+func _start_solo() -> void:
 	_mode = Mode.SOLO
 	_menu.visible = false
 	if _solo_progression == null:
 		_solo_progression = Progression.load_from(solo_progress_path)
-	_make_local(_solo_progression, false, timed)
+	_make_local(_solo_progression, false)
 	_layout()
 	_local.start(randi())
 	_mixer.restart()
@@ -164,12 +174,28 @@ func _back_to_menu(status := "") -> void:
 
 # --- Menu / network events --------------------------------------------------
 
+func _open_setup() -> void:
+	_menu.visible = false
+	_setup.set_config(_config)
+	_setup.visible = true
+
+
+func _close_setup() -> void:
+	_setup.visible = false
+	_menu.visible = true
+
+
+func _on_setup_started(config: GameConfig) -> void:
+	_config = config.duplicate_config()
+	_config.save_to(config_path)
+	_setup.visible = false
+	_start_solo()
+
+
 func _on_menu_choose(mode: String, address: String) -> void:
 	match mode:
 		"solo":
-			_start_solo()
-		"solo_timed":
-			_start_solo(true)
+			_open_setup()
 		"host":
 			var err := _net.host()
 			if err != OK:
