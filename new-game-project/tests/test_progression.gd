@@ -70,17 +70,15 @@ func _init() -> void:
 	# Points / attack
 	var base := Modifiers.new()
 	_check(base.scaled_points(3, 0, false) == 6 and base.scaled_points(0, 5, true) == 0, "base points")
-	_check(base.scaled_attack(3, 0) == 2 and base.scaled_attack(3, 2) == 2 and base.scaled_attack(0, 2) == 0, "base attack")
+	_check(is_equal_approx(base.attack_charge(20), 20.0) and base.attack_charge(0) == 0.0, "base attack charge equals the points")
 	var sal := _mods({"salvage": 1})
-	_check(sal.scaled_points(3, 2, false) == 8 and sal.scaled_attack(3, 2) == 4, "salvage: 3 atoms + 2 blasted = attack 2 + 2")
-	_check(base.scaled_attack(4, 5) == 3 and sal.scaled_attack(4, 5) == 3 + 5 and sal.scaled_attack(4, 1) == 3 + 1, "blast victims add nothing to attack without Salvage, one each with it")
+	_check(sal.scaled_points(3, 2, false) == 8, "salvage: 3 atoms + 2 blasted = 6 + 2 points")
 	_check(base.scaled_points(3, 4, false) == 6 and base.scaled_points(6, 9, false) == 20, "without Salvage blast victims score nothing")
 	_check(_mods({"combo_chain": 1}).scaled_points(3, 0, true) == 9 and _mods({"combo_chain": 1}).scaled_points(3, 0, false) == 6, "combo")
 	_check(bg.scaled_points(3, 0, false) == 12, "big game x2")
 	_check(_mods({"overclock": 1}).scaled_points(5, 0, false) == 17, "overclock 15*1.15 rounds")
-	_check(_mods({"heavy_hitter": 1}).scaled_attack(11, 0) == 11, "attack ceil no float error")
-	_check(_mods({"heavy_hitter": 1}).scaled_attack(3, 0) == 3, "attack ceil 2.2 -> 3")
-	_check(_mods({"glass_cannon": 1}).scaled_attack(4, 0) == 5, "glass cannon ceil 4.5")
+	_check(is_equal_approx(_mods({"heavy_hitter": 1}).attack_charge(20), 22.0), "heavy hitter +10% charge")
+	_check(is_equal_approx(_mods({"glass_cannon": 1}).attack_charge(20), 30.0), "glass cannon +50% charge")
 
 	# XP
 	var p := Progression.new()

@@ -111,6 +111,7 @@ func _suite(board_id: String) -> void:
 	var w := 8
 	pf = await _make(board_id)
 	pf.receive_attack(1)
+	pf._attack_charge = 24.0 # the 3-point pair tips it over 25 points: one attack
 	pf._queue[0] = e
 	pf.try_place(Vector2i(0, 0))
 	pf._queue[0] = w
@@ -118,6 +119,7 @@ func _suite(board_id: String) -> void:
 	_check(pf.board.is_empty(Vector2i(0, 0)), "pair cleared" + tag)
 	_check(pf._pending == 0 and pf._incoming.ghosts.is_empty(), "cancelling everything removes the ghost" + tag)
 	pf.receive_attack(40)
+	pf._attack_charge = 24.0
 	pf._queue[0] = e
 	pf.try_place(Vector2i(0, 0))
 	pf._queue[0] = w

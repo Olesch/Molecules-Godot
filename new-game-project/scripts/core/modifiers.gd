@@ -121,12 +121,9 @@ func big_game_mult() -> float:
 	return 2.0 if has(Cards.BIG_GAME) else 1.0
 
 
-func scaled_attack(molecule_size: int, blasted: int) -> int:
-	if molecule_size <= 0:
-		return 0
-	# Atoms wiped by a blast add nothing to the attack, except with Salvage (1 each).
-	var raw := Scoring.attack(molecule_size, 0) + (blasted if has(Cards.SALVAGE) else 0)
-	return int(ceil(raw * attack_mult() - 0.000001))
+## Attack charge earned by scoring this many points (the attack multiplier scales it).
+func attack_charge(points: int) -> float:
+	return maxf(0.0, points * attack_mult())
 
 
 func scaled_points(molecule_size: int, blasted: int, combo_active: bool) -> int:

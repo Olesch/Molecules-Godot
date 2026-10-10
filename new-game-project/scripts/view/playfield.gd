@@ -54,7 +54,8 @@ var mods: Modifiers:
 var _queue_rng := RandomNumberGenerator.new() ## seeded: both players get the same atoms
 var _fx_rng := RandomNumberGenerator.new() ## local only: effects and stray atom placement
 var _queue: Array[int] = []
-var _pending := 0 ## versus: queued incoming stray atoms (including the announced one)
+var _attack_charge := 0.0 ## versus: points not yet turned into stray atoms (Scoring.POINTS_PER_ATTACK each)
+var _pending := 0## versus: queued incoming stray atoms (including the announced one)
 var _hover := Vector2i(-1, -1)
 var _reroll_hover := false
 var _card_overlay: CardOverlay
@@ -109,6 +110,7 @@ func start(seed_value: int) -> void:
 	_fit_queue()
 	score = 0
 	_pending = 0
+	_attack_charge = 0.0
 	_stash = 0
 	_reroll_cd = 0
 	_lifeline_cd = 0
@@ -493,7 +495,11 @@ func _celebrate(cleared: Array[Vector2i]) -> void:
 	_fx.shake(0.25 + 0.06 * cleared.size())
 
 	# Incoming stray atoms are cancelled first; whatever is left goes to the opponent.
-	var outgoing := mods.scaled_attack(molecule, blasted)
+	# Every Scoring.POINTS_PER_ATTACK points scored send one stray atom; the remainder carries over.
+	_attack_charge += mods.attack_charge(points)
+	var outgoing := int(floor(_attack_charge / Scoring.POINTS_PER_ATTACK + 0.000001))
+	_attack_charge -= outgoing * Scoring.POINTS_PER_ATTACK
+	_attack_charge = maxf(_attack_charge, 0.0)
 	var cancel_mult := mods.cancel_mult()
 	var cancelled := mini(int(ceil(outgoing * cancel_mult)), _pending)
 	_pending -= cancelled
@@ -602,6 +608,17 @@ func _draw() -> void:
 		return
 	var font := ThemeDB.fallback_font
 	var board_px := board_pixel_size()
+
+	# Hovering an atom lights up its molecule: cells with an open connection red, fully bonded blue.
+	if interactive and not finished and board.get_atom(_hover) != 0:
+		for c in board.molecule_at(_hover):
+			var is_open := false
+			for dir in topology.dir_count:
+				if (board.get_atom(c) & (1 << dir)) and not board.is_bonded(c, dir):
+					is_open = true
+					break
+			var tint := Palette.BAD if is_open else Palette.BLUE
+			draw_colored_polygon(_cell_poly(c), Color(tint, 0.28))
 
 	for y in BOARD_H:
 		for x in BOARD_W:

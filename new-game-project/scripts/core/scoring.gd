@@ -21,8 +21,5 @@ static func points(molecule_size: int) -> int:
 	return (shown * (shown + 1)) / 2 + (molecule_size - shown) * MAX_ATOM_POINTS
 
 
-## Stray atoms sent to the opponent: one fewer than the molecule size, plus one per blast victim.
-static func attack(molecule_size: int, blasted: int) -> int:
-	if molecule_size <= 0:
-		return 0
-	return molecule_size - 1 + blasted
+## In versus, every this many points scored send one stray atom to the opponent.
+const POINTS_PER_ATTACK := 25
