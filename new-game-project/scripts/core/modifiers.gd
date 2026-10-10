@@ -47,33 +47,35 @@ static func from_dict(d) -> Modifiers:
 	return m
 
 
-func queue_size() -> int:
-	# The held atom plus the previews: one preview at the start, Long View adds more.
-	return clampi(2 + count(Cards.LONG_VIEW) - count(Cards.OVERCLOCK), 1, 8)
+## The base values default to the game's constants; the Playfield passes the setup screen's
+## choices (see GameConfig) so the cards stack on top of them.
+func queue_size(base_previews := 1) -> int:
+	# The held atom plus the previews: Long View adds more, Overclock takes one away.
+	return clampi(1 + base_previews + count(Cards.LONG_VIEW) - count(Cards.OVERCLOCK), 1, 8)
 
 
-func bomb_chance() -> float:
-	return Atoms.BOMB_CHANCE + count(Cards.DEMOLITION) * 0.05 + count(Cards.HOT_POTATO) * 0.08
+func bomb_chance(base := Atoms.BOMB_CHANCE) -> float:
+	return base + count(Cards.DEMOLITION) * 0.05 + count(Cards.HOT_POTATO) * 0.08
 
 
 ## Atoms with at least this many connections can be bombs (4 at the start, Mini Bombs lowers it).
-func min_bomb_connections(topology: Topology = null) -> int:
-	var topo := topology if topology != null else Topology.square()
-	return maxi(1, Atoms.BOMB_MIN_CONNECTIONS - count(Cards.MINI_BOMBS))
+func min_bomb_connections(_topology: Topology = null, base := Atoms.BOMB_MIN_CONNECTIONS) -> int:
+	return maxi(1, base - count(Cards.MINI_BOMBS))
 
 
-func wild_chance() -> float:
-	return maxf(0.0, Atoms.WILD_CHANCE + count(Cards.JOKER_SUPPLY) * 0.03 - count(Cards.HOT_POTATO) * 0.07)
+func wild_chance(base := Atoms.WILD_CHANCE) -> float:
+	return maxf(0.0, base + count(Cards.JOKER_SUPPLY) * 0.03 - count(Cards.HOT_POTATO) * 0.07)
 
 
-func shape_weights(topology: Topology = null) -> Array[float]:
+## crowded_mult scales the odds of crowded atoms before Lucky Shapes thins them out.
+func shape_weights(topology: Topology = null, crowded_mult := 1.0) -> Array[float]:
 	var topo := topology if topology != null else Topology.square()
 	var w: Array[float] = []
 	for x in topo.shape_weights:
 		w.append(x)
 	# Lucky Shapes thins out the crowded atoms (4+ connections: the cross on a square board,
 	# the 4-, 5- and 6-arm shapes on a hex board).
-	var crowded := pow(0.5, count(Cards.LUCKY_SHAPES))
+	var crowded := crowded_mult * pow(0.5, count(Cards.LUCKY_SHAPES))
 	for i in w.size():
 		if topo.connection_count(topo.shapes[i]) >= Atoms.BOMB_MIN_CONNECTIONS:
 			w[i] *= crowded
@@ -89,8 +91,8 @@ func attack_mult() -> float:
 
 
 ## Versus: seconds between incoming stray atoms. Thick Skin adds 0.5 s per level, Shield makes it 50% longer.
-func incoming_gap_seconds() -> float:
-	return (Danger.INCOMING_BASE_SECONDS + 0.5 * count(Cards.THICK_SKIN)) * (1.5 if has(Cards.SHIELD) else 1.0)
+func incoming_gap_seconds(base := Danger.INCOMING_BASE_SECONDS) -> float:
+	return (base + 0.5 * count(Cards.THICK_SKIN)) * (1.5 if has(Cards.SHIELD) else 1.0)
 
 
 func incoming_mult() -> float:
@@ -109,12 +111,12 @@ func preplaced_count(base: int) -> int:
 	return maxi(0, base - 3 * count(Cards.TIDY_START))
 
 
-func max_open_ends() -> int:
-	return 1 if has(Cards.LOOSE_ENDS) else 0
+func max_open_ends(base := 0) -> int:
+	return maxi(base, 1 if has(Cards.LOOSE_ENDS) else 0)
 
 
-func min_molecule() -> int:
-	return 3 if has(Cards.BIG_GAME) else 2
+func min_molecule(base := 2) -> int:
+	return maxi(base, 3 if has(Cards.BIG_GAME) else 2)
 
 
 func big_game_mult() -> float:
@@ -126,10 +128,10 @@ func attack_charge(points: int) -> float:
 	return maxf(0.0, points * attack_mult())
 
 
-func scaled_points(molecule_size: int, blasted: int, combo_active: bool) -> int:
+func scaled_points(molecule_size: int, blasted: int, combo_active: bool, max_atom_points := Scoring.MAX_ATOM_POINTS) -> int:
 	if molecule_size <= 0:
 		return 0
 	# Blast victims score nothing, except with Salvage (1 point each).
-	var raw := Scoring.points(molecule_size) + (blasted if has(Cards.SALVAGE) else 0)
+	var raw := Scoring.points(molecule_size, max_atom_points) + (blasted if has(Cards.SALVAGE) else 0)
 	var combo := 1.5 if has(Cards.COMBO_CHAIN) and combo_active else 1.0
 	return roundi(raw * score_mult() * big_game_mult() * combo)

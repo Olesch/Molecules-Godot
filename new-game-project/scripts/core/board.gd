@@ -10,6 +10,14 @@ var topology: Topology
 ## when it clears, and the minimum number of atoms for a molecule to clear.
 var max_open_ends := 0
 var min_molecule := 2
+## How far a bomb blast reaches.
+var blast_radius := Atoms.BLAST_RADIUS
+## How preplaced and stray atoms are generated (the queue uses its own, see Playfield):
+## chances, the bomb threshold (-1: Atoms.BOMB_MIN_CONNECTIONS) and shape weights (empty: the topology's).
+var bomb_chance := Atoms.BOMB_CHANCE
+var wild_chance := Atoms.WILD_CHANCE
+var min_bomb_connections := -1
+var shape_weights: Array[float] = []
 var _cells: Array[int] = []
 ## Masks of the atoms removed by the last place() call, parallel to its returned cells.
 var last_cleared_masks: Array[int] = []
@@ -114,7 +122,7 @@ func place(p: Vector2i, mask: int) -> Array[Vector2i]:
 		while not bombs.is_empty():
 			var bomb: Vector2i = bombs.pop_back()
 			last_exploded.append(bomb)
-			for n in topology.cells_within(bomb, Atoms.BLAST_RADIUS, width, height):
+			for n in topology.cells_within(bomb, blast_radius, width, height):
 				if get_atom(n) != 0:
 					depth_of[n] = int(depth_of[bomb]) + topology.distance(bomb, n)
 					bombs.append_array(_remove(n, removed, true, depth_of[n], bomb))
@@ -247,7 +255,7 @@ func _scatter(count: int, rng: RandomNumberGenerator, allow_specials: bool) -> A
 		var p := Vector2i(rng.randi_range(0, width - 1), rng.randi_range(0, height - 1))
 		if get_atom(p) != 0:
 			continue
-		var atom := Atoms.random_atom(rng, Atoms.BOMB_CHANCE, Atoms.WILD_CHANCE, [], -1, topology) if allow_specials else Atoms.random_shape(rng, [], topology)
+		var atom := Atoms.random_atom(rng, bomb_chance, wild_chance, shape_weights, min_bomb_connections, topology) if allow_specials else Atoms.random_shape(rng, shape_weights, topology)
 		for i in rng.randi_range(0, topology.dir_count - 1):
 			atom = topology.rotate_cw(atom)
 		_cells[p.y * width + p.x] = atom

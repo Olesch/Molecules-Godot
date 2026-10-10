@@ -5,7 +5,7 @@ class_name NetSession extends Node
 ## child "NetSession" under an identically named node such as /root/Game).
 
 const DEFAULT_PORT := 24680
-const CELL_COUNT := Playfield.BOARD_W * Playfield.BOARD_H
+const CELL_COUNT := Playfield.BOARD_W * Playfield.BOARD_H ## cells of a default board
 const MAX_ATTACK := 64
 
 signal connected()
@@ -21,6 +21,9 @@ signal options_received(options: Dictionary)
 var is_host := false
 ## Set by the host before a match: sent to the client with every game start (rematches too).
 var match_options := {}
+## Number of cells a snapshot must have: the match's board size (the owner updates it when the
+## match options are known).
+var expected_cells := CELL_COUNT
 
 var _peer_id := 0 # remote peer id, 0 when none
 var _host_ready := false
@@ -138,7 +141,7 @@ func _from_peer() -> bool:
 
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_snapshot(cells: PackedInt32Array) -> void:
-	if not _from_peer() or cells.size() != CELL_COUNT:
+	if not _from_peer() or cells.size() != expected_cells:
 		return
 	peer_snapshot.emit(cells)
 

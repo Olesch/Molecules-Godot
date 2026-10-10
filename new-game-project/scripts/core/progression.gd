@@ -12,15 +12,16 @@ var mods := Modifiers.new()
 var pick_levels: Array[int] = []
 
 
-static func xp_needed(for_level: int) -> int:
-	return 20 + 12 * for_level
+## xp_scale multiplies the cost (the "XP needed per level" game option).
+static func xp_needed(for_level: int, xp_scale := 1.0) -> int:
+	return maxi(1, roundi((20 + 12 * for_level) * xp_scale))
 
 
-func add_xp(base_points: int) -> int:
+func add_xp(base_points: int, xp_scale := 1.0) -> int:
 	xp += roundi(base_points * mods.xp_mult())
 	var gained := 0
-	while xp >= xp_needed(level):
-		xp -= xp_needed(level)
+	while xp >= xp_needed(level, xp_scale):
+		xp -= xp_needed(level, xp_scale)
 		level += 1
 		pick_levels.append(level)
 		gained += 1

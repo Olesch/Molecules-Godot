@@ -1,6 +1,7 @@
 class_name SetupScreen
 extends Control
-## Game setup screen, built from the option schema (GameConfig.OPTIONS by default).
+## Game setup screen, built from the option schema (GameConfig.OPTIONS by default). Options
+## flagged "advanced" sit behind an "Advanced properties" button (collapsed at first).
 
 signal started(config: GameConfig)
 signal back
@@ -14,6 +15,8 @@ var options: Array[Dictionary] = GameConfig.OPTIONS
 var _config := GameConfig.new()
 var _title: Label
 var _content: VBoxContainer
+var _advanced_box: VBoxContainer ## the advanced options; hidden until the toggle is pressed
+var _advanced_btn: Button
 var _scroll: ScrollContainer
 var _start_btn: Button
 var _back_btn: Button
@@ -67,8 +70,30 @@ func _build() -> void:
 	_content.minimum_size_changed.connect(_fit_scroll)
 	resized.connect(_fit_scroll)
 
+	var advanced: Array[Dictionary] = []
 	for option in options:
-		_add_section(option)
+		if option.get("advanced", false):
+			advanced.append(option)
+		else:
+			_add_section(option, _content)
+	if not advanced.is_empty():
+		UiKit.spacer(_content, 6)
+		_advanced_btn = UiKit.make_button("", Palette.DIM.darkened(0.4))
+		_advanced_btn.add_theme_font_size_override("font_size", 16)
+		_advanced_btn.custom_minimum_size = Vector2(0, 38)
+		_advanced_btn.pressed.connect(func() -> void: set_advanced_open(not _advanced_box.visible))
+		_content.add_child(_advanced_btn)
+		_advanced_box = VBoxContainer.new()
+		_advanced_box.add_theme_constant_override("separation", 8)
+		_advanced_box.visible = false
+		_content.add_child(_advanced_box)
+		var group := ""
+		for option in advanced:
+			if option.get("group", "") != group:
+				group = option.get("group", "")
+				_add_group_heading(group)
+			_add_section(option, _advanced_box)
+		_update_advanced_button()
 
 	UiKit.spacer(column, 10)
 	_start_btn = UiKit.make_button("Start", Palette.GOOD)
@@ -82,18 +107,29 @@ func _build() -> void:
 	_fit_scroll.call_deferred()
 
 
-func _add_section(option: Dictionary) -> void:
-	if not _rows.is_empty():
-		UiKit.spacer(_content, 10)
+func _add_group_heading(text: String) -> void:
+	if text == "":
+		return
+	UiKit.spacer(_advanced_box, 8)
+	var heading := Label.new()
+	heading.text = text.to_upper()
+	heading.add_theme_font_size_override("font_size", 16)
+	heading.add_theme_color_override("font_color", Palette.GOLD)
+	_advanced_box.add_child(heading)
+
+
+func _add_section(option: Dictionary, parent: Control) -> void:
+	if parent.get_child_count() > 0:
+		UiKit.spacer(parent, 10)
 	var label := Label.new()
 	label.text = String(option.label).to_upper()
 	label.add_theme_font_size_override("font_size", 13)
 	label.add_theme_color_override("font_color", Palette.DIM)
-	_content.add_child(label)
+	parent.add_child(label)
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
-	_content.add_child(row)
+	parent.add_child(row)
 	var group := ButtonGroup.new()
 	var buttons: Array[Button] = []
 	var id := String(option.id)
@@ -110,8 +146,8 @@ func _add_section(option: Dictionary) -> void:
 	help.custom_minimum_size = Vector2(COLUMN_W - 12, 0)
 	help.add_theme_font_size_override("font_size", 14)
 	help.add_theme_color_override("font_color", Color(Palette.TEXT, 0.6))
-	_content.add_child(help)
-	_rows.append({"id": id, "default": String(option.default), "choices": option.choices, "buttons": buttons, "help": help})
+	parent.add_child(help)
+	_rows.append({"id": id, "default": String(option.default), "choices": option.choices, "buttons": buttons, "help": help, "option_help": String(option.get("help", ""))})
 
 
 func _fit_scroll() -> void:
@@ -136,9 +172,55 @@ func current_config() -> GameConfig:
 	return _config.duplicate_config()
 
 
+## Number of option rows, advanced ones included (collapsed or not).
 func section_count() -> int:
 	_build()
 	return _rows.size()
+
+
+## True if the screen has an Advanced properties section.
+func has_advanced() -> bool:
+	_build()
+	return _advanced_box != null
+
+
+func is_advanced_open() -> bool:
+	_build()
+	return _advanced_box != null and _advanced_box.visible
+
+
+func set_advanced_open(open: bool) -> void:
+	_build()
+	if _advanced_box == null:
+		return
+	_advanced_box.visible = open
+	_update_advanced_button()
+	_fit_scroll.call_deferred()
+
+
+func advanced_button() -> Button:
+	_build()
+	return _advanced_btn
+
+
+## Number of option rows currently showing (the advanced ones only while open).
+func visible_section_count() -> int:
+	_build()
+	var n := 0
+	for r in _rows:
+		if (r.help as Label).is_visible_in_tree():
+			n += 1
+	return n
+
+
+func _update_advanced_button() -> void:
+	_advanced_btn.text = "Advanced properties  [-]" if _advanced_box.visible else "Advanced properties  [+]"
+
+
+## Height the whole screen asks for; it fits the window when this is at most the window height.
+func needed_height() -> float:
+	_build()
+	return _title.get_combined_minimum_size().y + 20.0 + _scroll.custom_minimum_size.y + 20.0 + _start_btn.get_combined_minimum_size().y + _back_btn.get_combined_minimum_size().y + 36.0
 
 
 func option_buttons(id: String) -> Array[Button]:
@@ -178,7 +260,7 @@ func _refresh() -> void:
 			var on := String(choice.value) == current
 			(r.buttons[i] as Button).set_pressed_no_signal(on)
 			if on:
-				(r.help as Label).text = String(choice.get("help", ""))
+				(r.help as Label).text = String(choice.get("help", r.option_help))
 
 
 func _on_choice(id: String, value: String) -> void:

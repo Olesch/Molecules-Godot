@@ -9,8 +9,6 @@ const SFX_NAMES: Array[String] = [
 const LOCAL_CELL := 72
 const REMOTE_CELL := 40
 const MARGIN := 40.0
-## Setup options that make sense in a versus match (the host picks, the client follows).
-const VERSUS_OPTIONS: Array[String] = ["board"]
 const SOLO_PROGRESS_PATH := "user://solo_progress.json"
 const CONFIG_PATH := "user://game_config.json"
 
@@ -30,7 +28,7 @@ var solo_progress_path := SOLO_PROGRESS_PATH
 var config_path := "user://game_config.json"
 var _config := GameConfig.new() ## last choices from the setup screen
 var _setup: SetupScreen
-var _host_setup: SetupScreen ## the hosting version: only the options that matter for a match
+var _host_setup: SetupScreen ## the hosting version: only the options that make sense in a match
 var versus_config_path := "user://versus_config.json"
 var _versus_config := GameConfig.new() ## the host's last choices
 var _match_config := GameConfig.new() ## options of the running or upcoming versus match
@@ -67,17 +65,14 @@ func _ready() -> void:
 	_menu.choose.connect(_on_menu_choose)
 	layer.add_child(_menu)
 	_setup = SetupScreen.new()
+	_setup.options = GameConfig.options_for("solo")
 	_setup.visible = false
 	_setup.started.connect(_on_setup_started)
 	_setup.back.connect(_close_setup)
 	layer.add_child(_setup)
 	_host_setup = SetupScreen.new()
 	_host_setup.title_text = "HOST SETUP"
-	var host_options: Array[Dictionary] = []
-	for option in GameConfig.OPTIONS:
-		if VERSUS_OPTIONS.has(option.id):
-			host_options.append(option)
-	_host_setup.options = host_options
+	_host_setup.options = GameConfig.options_for("versus")
 	_host_setup.visible = false
 	_host_setup.started.connect(_on_host_setup_started)
 	_host_setup.back.connect(_close_setup)
@@ -115,7 +110,7 @@ func _layout() -> void:
 			_local.home_position = Vector2((size.x - board_w) / 2.0, Playfield.HEADER)
 		_local.position = _local.home_position
 	if _remote:
-		_remote.home_position = Vector2(size.x - MARGIN - Playfield.BOARD_W * REMOTE_CELL, Playfield.HEADER + 40)
+		_remote.home_position = Vector2(size.x - MARGIN - _remote.board_pixel_size().x, Playfield.HEADER + 40)
 		_remote.position = _remote.home_position
 	queue_redraw()
 
@@ -223,6 +218,7 @@ func _on_host_setup_started(config: GameConfig) -> void:
 
 func _start_hosting() -> void:
 	_net.match_options = _match_config.to_dict()
+	_net.expected_cells = _cells_of(_match_config)
 	var err := _net.host()
 	if err != OK:
 		_menu.set_status("Could not host (%s). Is the port already in use?" % error_string(err))
@@ -235,6 +231,12 @@ func _start_hosting() -> void:
 ## Client: the host's options for the match (validated by GameConfig).
 func _on_options_received(options: Dictionary) -> void:
 	_match_config = GameConfig.from_dict(options)
+	_net.expected_cells = _cells_of(_match_config)
+
+
+func _cells_of(config: GameConfig) -> int:
+	var dims := config.board_dims()
+	return dims.x * dims.y
 
 
 func _on_setup_started(config: GameConfig) -> void:

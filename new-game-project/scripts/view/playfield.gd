@@ -11,11 +11,10 @@ signal restart_requested
 signal sfx_requested(sfx_name: String, pitch: float)
 signal progression_changed ## XP, level or cards changed (solo saves them)
 
-const BOARD_W := 8
+const BOARD_W := 8 ## default board size; the board_size option changes board_w / board_h
 const BOARD_H := 8
 const HEADER := 130
-const PREPLACED := 10
-const REROLL_COOLDOWN := 4 ## placements before Reroll recharges
+const REROLL_COOLDOWN := 4 ## default placements before Reroll recharges (the reroll_cooldown option)
 const LIFELINE_FILL := 0.78
 const LIFELINE_COOLDOWN := 4
 const CLEAR_STEP := 0.07 ## seconds between neighbouring atoms of a clearing molecule
@@ -24,9 +23,11 @@ const REROLL_RADIUS := 22.0 ## the round Reroll button next to the held atom
 const REROLL_SLOT := 62.0 ## header width it takes, pushing the coming-up queue to the right
 const WARN_SECONDS := 3.0 ## timed mode: the warning sound and red countdown start this far ahead
 
-const HEX_BOARD_UNITS := 8.5 ## a hex board is as wide as a square one when its cells are width / 8.5
+const REFERENCE_COLS := 8 ## whatever the board size, the board is as wide as BOARD_W cells of base_cell_size
 
-var base_cell_size := 72 ## cell width of a square board; hex cells are sized to match its width
+var base_cell_size := 72 ## cell width of a normal square board; other boards are sized to match its width
+var board_w := BOARD_W
+var board_h := BOARD_H
 var cell_size := 72.0
 var topology: Topology = Topology.square()
 var interactive := true
@@ -54,7 +55,7 @@ var mods: Modifiers:
 var _queue_rng := RandomNumberGenerator.new() ## seeded: both players get the same atoms
 var _fx_rng := RandomNumberGenerator.new() ## local only: effects and stray atom placement
 var _queue: Array[int] = []
-var _attack_charge := 0.0 ## versus: points not yet turned into stray atoms (Scoring.POINTS_PER_ATTACK each)
+var _attack_charge := 0.0 ## versus: points not yet turned into stray atoms (the attack_points option each)
 var _pending := 0## versus: queued incoming stray atoms (including the announced one)
 var _hover := Vector2i(-1, -1)
 var _reroll_hover := false
@@ -93,11 +94,12 @@ func _ready() -> void:
 func start(seed_value: int) -> void:
 	_queue_rng.seed = seed_value
 	_apply_topology()
-	board = Board.new(BOARD_W, BOARD_H, topology)
+	board = Board.new(board_w, board_h, topology)
 	if _card_overlay:
 		_card_overlay.board_size = board_pixel_size()
 	_apply_rules_to_board()
-	board.preplace(mods.preplaced_count(PREPLACED), _queue_rng)
+	board.preplace(mods.preplaced_count(config.get_int("preplaced")), _queue_rng)
+	_apply_danger_config()
 	_danger.ghosts.clear()
 	_danger.timed = timed
 	_incoming.ghosts.clear()
@@ -130,32 +132,54 @@ func start(seed_value: int) -> void:
 		_maybe_offer.call_deferred()
 
 
-## Takes the topology from the config and sizes the cells so a hex board is as wide as a
-## square one. Must run before anything is drawn.
+## Takes the topology and board size from the config and sizes the cells so every board is
+## as wide as a normal square one (a hex board is half a cell wider). Must run before
+## anything is drawn.
 func _apply_topology() -> void:
 	topology = Topology.for_id(config.board_id())
-	var square_width := BOARD_W * float(base_cell_size)
-	cell_size = square_width / HEX_BOARD_UNITS if topology.id == "hex" else float(base_cell_size)
+	var dims := config.board_dims()
+	board_w = dims.x
+	board_h = dims.y
+	var square_width := REFERENCE_COLS * float(base_cell_size)
+	cell_size = square_width / (board_w + 0.5) if topology.id == "hex" else square_width / board_w
 	_fx.topology = topology
 	_fx.cell_size = cell_size
 
 
 func board_pixel_size() -> Vector2:
-	return topology.board_pixel_size(BOARD_W, BOARD_H, cell_size)
+	return topology.board_pixel_size(board_w, board_h, cell_size)
 
 
+## Game options and cards together decide the board's rules. Preplaced and stray atoms use
+## the options alone (cards only change the queue).
 func _apply_rules_to_board() -> void:
-	board.max_open_ends = mods.max_open_ends()
-	board.min_molecule = mods.min_molecule()
+	board.max_open_ends = mods.max_open_ends(config.get_int("open_ends"))
+	board.min_molecule = mods.min_molecule(config.get_int("min_molecule"))
+	board.blast_radius = config.get_int("blast_radius")
+	board.bomb_chance = config.get_float("bombs")
+	board.wild_chance = config.get_float("wild_chance")
+	board.min_bomb_connections = config.get_int("bomb_min")
+	board.shape_weights = Modifiers.new().shape_weights(topology, config.get_float("crowded"))
+
+
+## The solo pressure schedule from the options (versus uses _incoming, see _announce_incoming).
+func _apply_danger_config() -> void:
+	_danger.base_interval = config.get_int("turn_start")
+	_danger.min_interval = config.get_int("turn_min")
+	_danger.first_grace = config.get_int("turn_grace")
+	_danger.base_seconds = config.get_float("time_start")
+	_danger.min_seconds = config.get_float("time_min")
+	_danger.first_grace_seconds = config.get_float("time_grace")
+	_danger.double_above_level = config.get_int("double_level")
 
 
 func _new_atom() -> int:
-	return Atoms.random_atom(_queue_rng, mods.bomb_chance(), mods.wild_chance(), mods.shape_weights(topology), mods.min_bomb_connections(topology), topology)
+	return Atoms.random_atom(_queue_rng, mods.bomb_chance(config.get_float("bombs")), mods.wild_chance(config.get_float("wild_chance")), mods.shape_weights(topology, config.get_float("crowded")), mods.min_bomb_connections(topology, config.get_int("bomb_min")), topology)
 
 
 ## Grows or shrinks the queue to the size the current cards allow.
 func _fit_queue() -> void:
-	var target := mods.queue_size()
+	var target := mods.queue_size(config.get_int("preview"))
 	while _queue.size() < target:
 		_queue.append(_new_atom())
 	while _queue.size() > target:
@@ -196,7 +220,7 @@ func _announce_incoming() -> void:
 		return
 	if not _incoming.ghosts.is_empty():
 		return
-	_incoming.seconds_override = mods.incoming_gap_seconds()
+	_incoming.seconds_override = mods.incoming_gap_seconds(config.get_float("incoming_seconds"))
 	_incoming.schedule_next(board, progression.level, _fx_rng)
 
 
@@ -246,13 +270,13 @@ func _land_incoming(d: Dictionary) -> void:
 
 ## Mirror mode: show the opponent's board. Atoms that vanished get a small burst.
 func apply_snapshot(cells: PackedInt32Array) -> void:
-	if board == null or cells.size() != BOARD_W * BOARD_H:
+	if board == null or cells.size() != board_w * board_h:
 		return
-	for y in BOARD_H:
-		for x in BOARD_W:
+	for y in board_h:
+		for x in board_w:
 			var p := Vector2i(x, y)
 			var old := board.get_atom(p)
-			var now := cells[y * BOARD_W + x]
+			var now := cells[y * board_w + x]
 			if old != 0 and now == 0:
 				_fx.burst(_cell_center(p), AtomPainter.color(old), 8, 160.0)
 			elif old == 0 and now != 0:
@@ -348,7 +372,7 @@ func reroll_held() -> void:
 	if finished or _offer_open() or not mods.has(Cards.REROLL) or _reroll_cd > 0:
 		return
 	_queue[0] = _new_atom()
-	_reroll_cd = REROLL_COOLDOWN
+	_reroll_cd = config.get_int("reroll_cooldown")
 	sfx_requested.emit("rotate", 1.4)
 	queue_redraw()
 
@@ -474,7 +498,7 @@ func _celebrate(cleared: Array[Vector2i]) -> void:
 	var molecule := board.last_molecule_size
 	var blasted := cleared.size() - molecule
 	var combo := _since_clear <= 3 # placements since the previous clear
-	var points := mods.scaled_points(molecule, blasted, combo)
+	var points := mods.scaled_points(molecule, blasted, combo, config.get_int("max_points"))
 	score += points
 	# The clear spreads from the placed atom through the molecule: every atom stays visible
 	# as a ghost until the wave reaches it (see _fire_ghost).
@@ -495,10 +519,11 @@ func _celebrate(cleared: Array[Vector2i]) -> void:
 	_fx.shake(0.25 + 0.06 * cleared.size())
 
 	# Incoming stray atoms are cancelled first; whatever is left goes to the opponent.
-	# Every Scoring.POINTS_PER_ATTACK points scored send one stray atom; the remainder carries over.
+	# Every "points per stray atom" points scored send one stray atom; the remainder carries over.
+	var per_attack := config.get_int("attack_points")
 	_attack_charge += mods.attack_charge(points)
-	var outgoing := int(floor(_attack_charge / Scoring.POINTS_PER_ATTACK + 0.000001))
-	_attack_charge -= outgoing * Scoring.POINTS_PER_ATTACK
+	var outgoing := int(floor(_attack_charge / per_attack + 0.000001))
+	_attack_charge -= outgoing * per_attack
 	_attack_charge = maxf(_attack_charge, 0.0)
 	var cancel_mult := mods.cancel_mult()
 	var cancelled := mini(int(ceil(outgoing * cancel_mult)), _pending)
@@ -514,10 +539,10 @@ func _celebrate(cleared: Array[Vector2i]) -> void:
 	if mods.has(Cards.GARDENER):
 		_remove_random_stray()
 	if mods.has(Cards.OVERCHARGE) and molecule >= 4:
-		_queue.insert(0, Atoms.random_shape(_queue_rng, mods.shape_weights(topology), topology) | Atoms.BOMB)
+		_queue.insert(0, Atoms.random_shape(_queue_rng, mods.shape_weights(topology, config.get_float("crowded")), topology) | Atoms.BOMB)
 		_fit_queue()
 		sfx_requested.emit("clear", 1.3)
-	if progression.add_xp(points) > 0:
+	if progression.add_xp(points, config.get_float("xp_scale")) > 0:
 		sfx_requested.emit("clear", 1.5)
 		_offer_wait = max_depth * step + 0.6
 	progression_changed.emit()
@@ -584,7 +609,7 @@ func _lose() -> void:
 	sfx_requested.emit("lose", 1.0)
 	_fx.shake_max()
 	for i in 40:
-		var cell := Vector2i(_fx_rng.randi_range(0, BOARD_W - 1), _fx_rng.randi_range(0, BOARD_H - 1))
+		var cell := Vector2i(_fx_rng.randi_range(0, board_w - 1), _fx_rng.randi_range(0, board_h - 1))
 		_fx.burst(_cell_center(cell), Palette.BAD, 2, 260.0)
 	lost.emit()
 
@@ -611,8 +636,8 @@ func _draw() -> void:
 
 	# Molecules that can never be finished (an end is blocked) get a subtle red background.
 	var seen := {}
-	for y in BOARD_H:
-		for x in BOARD_W:
+	for y in board_h:
+		for x in board_w:
 			var start := Vector2i(x, y)
 			if seen.has(start) or board.get_atom(start) == 0:
 				continue
@@ -634,8 +659,8 @@ func _draw() -> void:
 			var tint := Palette.BAD if is_open else Palette.BLUE
 			draw_colored_polygon(_cell_poly(c), Color(tint, 0.28))
 
-	for y in BOARD_H:
-		for x in BOARD_W:
+	for y in board_h:
+		for x in board_w:
 			var p := Vector2i(x, y)
 			_draw_cell_outline(p)
 			var mask := board.get_atom(p)
@@ -678,7 +703,7 @@ func _draw() -> void:
 
 ## The cells a bomb placed at p would wipe (for the hover preview).
 func blast_preview_cells(p: Vector2i) -> Array[Vector2i]:
-	return board.topology.cells_within(p, Atoms.BLAST_RADIUS, BOARD_W, BOARD_H)
+	return board.topology.cells_within(p, board.blast_radius, board_w, board_h)
 
 
 func _cell_poly(p: Vector2i) -> PackedVector2Array:
@@ -731,7 +756,7 @@ func _draw_header(font: Font, board_px: Vector2) -> void:
 	for i in range(1, _queue.size()):
 		_draw_atom(Vector2(queue_x + (i - 1) * spacing, -HEADER + 83), _queue[i], 0.85, Vector2i(-1, -1), 0.6, 72)
 	draw_string(font, Vector2(0, -HEADER + 40), "SCORE: %d" % score, HORIZONTAL_ALIGNMENT_RIGHT, board_px.x, 22, Palette.TEXT)
-	var need := Progression.xp_needed(progression.level)
+	var need := Progression.xp_needed(progression.level, config.get_float("xp_scale"))
 	draw_string(font, Vector2(board_px.x - 207, -HEADER + 57), "LV %d" % progression.level, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Palette.DIM)
 	var bar := Rect2(board_px.x - 160, -HEADER + 49, 160, 6)
 	draw_rect(bar, Palette.GRID)
@@ -773,7 +798,7 @@ func _draw_reroll_button(font: Font) -> void:
 	draw_circle(center, REROLL_RADIUS, Palette.PANEL.lightened(0.12) if _reroll_hover and ready else Palette.PANEL)
 	draw_arc(center, REROLL_RADIUS, 0.0, TAU, 40, Color(accent, 0.45), 2.0)
 	if not ready:
-		var progress := 1.0 - float(_reroll_cd) / REROLL_COOLDOWN
+		var progress := 1.0 - float(_reroll_cd) / config.get_int("reroll_cooldown")
 		draw_arc(center, REROLL_RADIUS, -PI / 2.0, -PI / 2.0 + TAU * progress, 40, Palette.PURPLE, 4.0)
 	var icon := Palette.TEXT if ready else Palette.DIM
 	var r := 10.0

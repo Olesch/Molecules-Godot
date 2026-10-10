@@ -30,6 +30,8 @@ func _init() -> void:
 	_check(g._menu.visible and not g._setup.visible, "starts on the menu")
 	g._on_menu_choose("solo", "")
 	_check(not g._menu.visible and g._setup.visible, "Solo opens the setup screen, not the game")
+	_check(g._setup.section_count() == GameConfig.options_for("solo").size() and g._setup.option_buttons("attack_points").is_empty() and not g._setup.option_buttons("turn_start").is_empty(), "solo setup lists the solo options only")
+	_check(not g._setup.is_advanced_open(), "solo setup starts with advanced collapsed")
 	_check(g._local == null, "no game has started yet")
 	_check(g._setup.current_config().pressure() == GameConfig.PRESSURE_TURNS, "setup shows the defaults the first time")
 
@@ -75,6 +77,24 @@ func _init() -> void:
 	_check(g._local.topology.id == "hex" and g._local.board.topology.id == "hex", "Start with Hexagonal gives a hex playfield")
 	_check(GameConfig.load_from(CONFIG_PATH).board_id() == "hex", "the board choice was saved")
 
+	# Advanced choices are saved and reach the playfield.
+	g._back_to_menu()
+	g._on_menu_choose("solo", "")
+	g._setup.set_advanced_open(true)
+	var sizes := GameConfig.choice_values("board_size")
+	g._setup.option_buttons("board_size")[sizes.find("6")].pressed.emit()
+	var radii := GameConfig.choice_values("blast_radius")
+	g._setup.option_buttons("blast_radius")[radii.find("2")].pressed.emit()
+	g._setup.start_button().pressed.emit()
+	await process_frame
+	_check(g._local.board_w == 6 and g._local.board.width == 6 and g._local.board.blast_radius == 2, "advanced choices reach the solo playfield")
+	var saved := GameConfig.load_from(CONFIG_PATH)
+	_check(saved.get_int("board_size") == 6 and saved.get_int("blast_radius") == 2, "advanced choices were saved")
+	g._back_to_menu()
+	g._on_menu_choose("solo", "")
+	_check(g._setup.current_config().get_int("blast_radius") == 2, "setup remembers advanced choices")
+	g._setup.back_button().pressed.emit()
+
 	# Keyboard: Escape goes back, Enter starts.
 	g._back_to_menu()
 	g._on_menu_choose("solo", "")
@@ -92,7 +112,9 @@ func _init() -> void:
 	g._on_menu_choose("host", "")
 	_check(g._host_setup.visible and not g._menu.visible and not g._setup.visible, "Host opens the host setup screen")
 	_check(g._mode == g.Mode.MENU and not g._net.is_peer_connected(), "nothing is hosted before Start")
-	_check(g._host_setup.section_count() == 1 and not g._host_setup.option_buttons("board").is_empty(), "host setup offers the board choice only")
+	_check(g._host_setup.section_count() == GameConfig.options_for("versus").size() and not g._host_setup.option_buttons("board").is_empty(), "host setup offers the versus options")
+	_check(not g._host_setup.option_buttons("attack_points").is_empty() and not g._host_setup.option_buttons("bombs").is_empty(), "host setup has main and versus-only advanced options")
+	_check(g._host_setup.has_advanced() and not g._host_setup.is_advanced_open(), "host setup keeps the advanced options collapsed")
 	_check(g._host_setup.option_buttons("pressure").is_empty(), "solo-only options are not shown when hosting")
 	g._host_setup.back_button().pressed.emit()
 	_check(g._menu.visible and not g._host_setup.visible, "Back from the host setup returns to the menu")

@@ -5,7 +5,8 @@ extends RefCounted
 ## transparent "ghosts" with a countdown in placements. Placing an atom on a ghost's cell
 ## pushes that ghost to another free cell. Above DOUBLE_ABOVE_LEVEL two atoms drop at once.
 ## Two flavours: turn-based (the countdown counts placements) and timed (it counts seconds).
-## Pure logic: the Playfield draws the ghosts and places the atoms.
+## The schedule numbers below are the defaults; the instance fields (set from the game options)
+## replace them. Pure logic: the Playfield draws the ghosts and places the atoms.
 
 const BASE_INTERVAL := 8 ## placements between drops at level 1
 const MIN_INTERVAL := 3 ## the interval never gets shorter than this
@@ -30,23 +31,31 @@ var count_override := 0
 ## > 0 (timed): this is the gap used by start() and schedule_next() instead of seconds(level),
 ## and start() adds no first-drop grace.
 var seconds_override := 0.0
+## The schedule of this instance; the constants above are the defaults.
+var base_interval := BASE_INTERVAL
+var min_interval := MIN_INTERVAL
+var first_grace := FIRST_GRACE
+var base_seconds := BASE_SECONDS
+var min_seconds := MIN_SECONDS
+var first_grace_seconds := FIRST_GRACE_SECONDS
+var double_above_level := DOUBLE_ABOVE_LEVEL
 
 
 ## Placements between drops at the given level (level 1 = BASE_INTERVAL).
-static func interval(level: int) -> int:
+static func interval(level: int, base := BASE_INTERVAL, minimum := MIN_INTERVAL) -> int:
 	var steps := floori((level - 1) / float(LEVELS_PER_STEP))
-	return maxi(MIN_INTERVAL, BASE_INTERVAL - steps)
+	return maxi(minimum, base - steps)
 
 
 ## Seconds between drops at the given level (timed flavour).
-static func seconds(level: int) -> float:
+static func seconds(level: int, base := BASE_SECONDS, minimum := MIN_SECONDS) -> float:
 	var steps := floori((level - 1) / float(LEVELS_PER_STEP))
-	return maxf(MIN_SECONDS, BASE_SECONDS - steps * SECONDS_PER_STEP)
+	return maxf(minimum, base - steps * SECONDS_PER_STEP)
 
 
 ## How many atoms drop each time at the given level.
-static func spawn_count(level: int) -> int:
-	return 2 if level > DOUBLE_ABOVE_LEVEL else 1
+static func spawn_count(level: int, double_above := DOUBLE_ABOVE_LEVEL) -> int:
+	return 2 if level > double_above else 1
 
 
 ## Starts a fresh game: first countdown (with grace) and the first ghosts.
@@ -54,18 +63,18 @@ func start(board: Board, level: int, rng: RandomNumberGenerator) -> void:
 	if timed and seconds_override > 0.0:
 		countdown = seconds_override
 	else:
-		countdown = seconds(level) + FIRST_GRACE_SECONDS if timed else float(interval(level) + FIRST_GRACE)
+		countdown = seconds(level, base_seconds, min_seconds) + first_grace_seconds if timed else float(interval(level, base_interval, min_interval) + first_grace)
 	plan(board, level, rng)
 
 
 ## Chooses new ghosts on free cells (replacing the old ones).
 func plan(board: Board, level: int, rng: RandomNumberGenerator) -> void:
 	ghosts.clear()
-	for i in (count_override if count_override > 0 else spawn_count(level)):
+	for i in (count_override if count_override > 0 else spawn_count(level, double_above_level)):
 		var cell := _random_free_cell(board, rng)
 		if cell.x < 0:
 			break
-		ghosts.append({"cell": cell, "mask": _random_stray(rng, board.topology)})
+		ghosts.append({"cell": cell, "mask": _random_stray(rng, board.topology, board.shape_weights)})
 
 
 ## Sets the next countdown and plans the next ghosts; call after the drops were applied.
@@ -73,7 +82,7 @@ func schedule_next(board: Board, level: int, rng: RandomNumberGenerator) -> void
 	if timed and seconds_override > 0.0:
 		countdown = seconds_override
 	else:
-		countdown = seconds(level) if timed else float(interval(level))
+		countdown = seconds(level, base_seconds, min_seconds) if timed else float(interval(level, base_interval, min_interval))
 	plan(board, level, rng)
 
 
@@ -146,8 +155,8 @@ func _random_free_cell(board: Board, rng: RandomNumberGenerator, avoid := Vector
 
 
 ## A plain atom (no bomb or wildcard) in a random orientation.
-func _random_stray(rng: RandomNumberGenerator, topology: Topology) -> int:
-	var mask := Atoms.random_shape(rng, [], topology)
+func _random_stray(rng: RandomNumberGenerator, topology: Topology, weights: Array[float]) -> int:
+	var mask := Atoms.random_shape(rng, weights, topology)
 	for i in rng.randi_range(0, topology.dir_count - 1):
 		mask = topology.rotate_cw(mask)
 	return mask

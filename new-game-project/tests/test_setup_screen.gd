@@ -60,4 +60,66 @@ func _run() -> void:
 	await process_frame
 	_check(big.section_count() == 6, "custom option list builds six sections")
 	_check(big.help_text("opt3") == "Help A for 3", "custom option help shown")
+	_check(not big.has_advanced() and big.advanced_button() == null, "no advanced section when no option is advanced")
+
+	await _advanced_section()
 	_finish()
+
+
+func _advanced_section() -> void:
+	var screen := SetupScreen.new()
+	root.add_child(screen)
+	await process_frame
+	await process_frame
+	var total := GameConfig.OPTIONS.size()
+	var main_count := 0
+	for o in GameConfig.OPTIONS:
+		if not o.get("advanced", false):
+			main_count += 1
+	_check(screen.section_count() == total, "all %d options are built" % total)
+	_check(screen.has_advanced() and screen.advanced_button() != null, "an Advanced properties button exists")
+	_check(not screen.is_advanced_open() and screen.visible_section_count() == main_count, "advanced is collapsed by default: only the %d main options show" % main_count)
+	var advanced_id := "bomb_min"
+	_check(not (screen.option_buttons(advanced_id)[0] as Button).is_visible_in_tree(), "an advanced row is hidden while collapsed")
+	var collapsed_h := screen.needed_height()
+	screen.advanced_button().pressed.emit()
+	await process_frame
+	await process_frame
+	_check(screen.is_advanced_open() and screen.visible_section_count() == total, "pressing the button shows every option")
+	_check((screen.option_buttons(advanced_id)[0] as Button).is_visible_in_tree(), "an advanced row is visible when open")
+	_check(screen.needed_height() <= screen.size.y, "the open screen still fits the window (%.0f of %.0f)" % [screen.needed_height(), screen.size.y])
+	_check(screen.needed_height() >= collapsed_h, "the scroll area grows when opened")
+	screen.advanced_button().pressed.emit()
+	await process_frame
+	_check(not screen.is_advanced_open() and screen.visible_section_count() == main_count, "pressing again collapses it")
+
+	# Choices inside the collapsed section still work and are reported.
+	screen.set_advanced_open(true)
+	var values := GameConfig.choice_values("blast_radius")
+	screen.option_buttons("blast_radius")[values.find("2")].pressed.emit()
+	_check(screen.current_config().get_int("blast_radius") == 2, "an advanced choice changes the config")
+	_check(screen.help_text("blast_radius").contains("2"), "an advanced choice shows its help")
+	var cfg := GameConfig.new()
+	cfg.set_value("incoming_seconds", "12")
+	screen.set_config(cfg)
+	var pressed_ok := true
+	var inc_values := GameConfig.choice_values("incoming_seconds")
+	for i in inc_values.size():
+		if screen.option_buttons("incoming_seconds")[i].button_pressed != (inc_values[i] == "12"):
+			pressed_ok = false
+	_check(pressed_ok and screen.current_config().get_int("blast_radius") == 1, "set_config highlights saved advanced values")
+	screen.queue_free()
+
+	# A versus-only screen (what the host sees) lists the shared and the versus options.
+	var host := SetupScreen.new()
+	host.options = GameConfig.options_for("versus")
+	root.add_child(host)
+	await process_frame
+	await process_frame
+	_check(host.option_buttons("pressure").is_empty() and not host.option_buttons("board").is_empty() and not host.option_buttons("attack_points").is_empty(), "host screen: no solo pressure, has board and versus options")
+	_check(host.has_advanced() and not host.is_advanced_open(), "host screen: advanced is collapsed")
+	host.set_advanced_open(true)
+	await process_frame
+	await process_frame
+	_check(host.needed_height() <= host.size.y, "the open host screen fits the window")
+	host.queue_free()
