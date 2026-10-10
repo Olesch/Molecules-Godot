@@ -54,7 +54,7 @@ var mods: Modifiers:
 var _queue_rng := RandomNumberGenerator.new() ## seeded: both players get the same atoms
 var _fx_rng := RandomNumberGenerator.new() ## local only: effects and stray atom placement
 var _queue: Array[int] = []
-var _pending := 0 ## stray atoms waiting to land after this player's next plain placement
+var _pending := 0 ## versus: queued incoming stray atoms (including the announced one)
 var _hover := Vector2i(-1, -1)
 var _reroll_hover := false
 var _card_overlay: CardOverlay
@@ -70,6 +70,7 @@ var _overlay_color := Palette.TEXT
 
 var _fx := PlayfieldFx.new() ## particles, popups, ghosts and shake
 var _danger := Danger.new() ## solo pressure: announced stray atoms that drop on a schedule
+var _incoming := Danger.new() ## versus: the one announced incoming stray atom and its countdown
 var _warned := false ## the timed drop warning already played this round
 var _offer_wait := 0.0 ## seconds to hold back a level-up card pick so the clear animation can play
 
@@ -98,6 +99,9 @@ func start(seed_value: int) -> void:
 	board.preplace(mods.preplaced_count(PREPLACED), _queue_rng)
 	_danger.ghosts.clear()
 	_danger.timed = timed
+	_incoming.ghosts.clear()
+	_incoming.timed = true
+	_incoming.count_override = 1
 	_warned = false
 	if _danger_active():
 		_danger.start(board, progression.level, _fx_rng)
@@ -165,12 +169,76 @@ func set_overlay(overlay_title: String, sub := "", color := Palette.TEXT) -> voi
 	queue_redraw()
 
 
-## Called when the opponent attacks; the atoms land after the next plain placement.
+## Called when the opponent attacks: the atoms are queued and land one at a time,
+## each announced as a ghost with a countdown (see _advance_incoming).
 func receive_attack(amount: int) -> void:
 	if finished or amount <= 0:
 		return
 	_pending += int(ceil(amount * mods.incoming_mult()))
 	sfx_requested.emit("warning", 1.0)
+	_announce_incoming()
+	queue_redraw()
+
+
+## Versus only: the incoming stray atoms are announced and landed on a clock.
+func _incoming_active() -> bool:
+	return interactive and versus
+
+
+## Announces the next queued atom as a ghost with a full gap, unless one is already announced.
+func _announce_incoming() -> void:
+	if not _incoming_active() or board == null:
+		return
+	if _pending <= 0:
+		_incoming.ghosts.clear()
+		return
+	if not _incoming.ghosts.is_empty():
+		return
+	_incoming.seconds_override = mods.incoming_gap_seconds()
+	_incoming.schedule_next(board, progression.level, _fx_rng)
+
+
+## Every frame in versus: runs the incoming clock (it stops while a card pick is open).
+func _advance_incoming(delta: float) -> void:
+	if _pending <= 0:
+		_incoming.ghosts.clear()
+		return
+	if _incoming.ghosts.is_empty():
+		_announce_incoming()
+		return
+	var drops := _incoming.advance(delta, board, _fx_rng)
+	if drops.is_empty():
+		if _incoming.ghosts.is_empty():
+			_announce_incoming() # the ghost found no room and vanished
+		return
+	for d in drops:
+		_land_incoming(d)
+	if finished:
+		return
+	_incoming.ghosts.clear()
+	_announce_incoming()
+
+
+## One incoming atom lands. One that closes a molecule clears it like any placement.
+func _land_incoming(d: Dictionary) -> void:
+	var cell: Vector2i = d.cell
+	_pending = maxi(0, _pending - 1)
+	if board.is_empty(cell):
+		var cleared := board.place(cell, d.mask)
+		if cleared.is_empty():
+			_stray[cell] = true
+			_fx.pop(cell)
+			_fx.burst(_cell_center(cell), Palette.ORANGE, 8, 160.0)
+			_fx.ring(_cell_center(cell), Palette.ORANGE, 0.35)
+		else:
+			_celebrate(cleared)
+	sfx_requested.emit("garbage", 1.0)
+	_fx.shake(0.35)
+	if mods.has(Cards.COUNTERSTRIKE):
+		attack.emit(1)
+	if board.is_full():
+		_lose()
+	board_changed.emit(board.snapshot())
 	queue_redraw()
 
 
@@ -313,13 +381,20 @@ func try_place(p: Vector2i) -> void:
 		sfx_requested.emit("place", 1.0)
 		_fx.shake(0.08)
 		_fx.burst(_cell_center(p), Palette.TEXT.darkened(0.4), 6, 90.0)
-		_land_stray_atoms()
 		if board.is_full():
 			_lose()
 	else:
 		_celebrate(cleared)
 	if _danger_active() and not finished:
 		_danger_step(p)
+	if _incoming_active() and not finished:
+		var moved := _incoming.relocate_at(p, board, _fx_rng)
+		if moved.x >= 0:
+			var from := _cell_center(p)
+			_fx.spark(from, _cell_center(moved), Palette.ORANGE, 0.3)
+			_fx.ring(from, Palette.ORANGE, 0.35)
+		elif _incoming.ghosts.is_empty():
+			_announce_incoming() # the ghost had no room left
 	_apply_lifeline()
 	board_changed.emit(board.snapshot()) # also after losing, so the opponent sees the final board
 	queue_redraw()
@@ -393,24 +468,6 @@ func _apply_lifeline() -> void:
 		sfx_requested.emit("clear", 1.5)
 
 
-func _land_stray_atoms() -> void:
-	if _pending <= 0:
-		return
-	if mods.has(Cards.SHIELD) and _placements % 4 == 0:
-		return # Shield: every 4th placement the strays are held back
-	var landing := mini(_pending, mods.garbage_cap())
-	_pending -= landing
-	var cells := board.add_garbage(landing, _fx_rng)
-	for c in cells:
-		_stray[c] = true
-		_fx.pop(c)
-		_fx.burst(_cell_center(c), Palette.PURPLE.darkened(0.2), 6, 140.0)
-	sfx_requested.emit("garbage", 1.0)
-	_fx.shake(0.45)
-	if mods.has(Cards.COUNTERSTRIKE):
-		attack.emit(1)
-
-
 func _celebrate(cleared: Array[Vector2i]) -> void:
 	var molecule := board.last_molecule_size
 	var blasted := cleared.size() - molecule
@@ -440,6 +497,8 @@ func _celebrate(cleared: Array[Vector2i]) -> void:
 	var cancel_mult := mods.cancel_mult()
 	var cancelled := mini(int(ceil(outgoing * cancel_mult)), _pending)
 	_pending -= cancelled
+	if _pending <= 0:
+		_incoming.ghosts.clear()
 	outgoing -= mini(outgoing, int(ceil(cancelled / cancel_mult)))
 	if outgoing > 0:
 		sfx_requested.emit("attack", 1.0)
@@ -531,8 +590,10 @@ func _process(delta: float) -> void:
 	_fx.advance(delta)
 	if timed and _danger_active() and not finished and not _offer_open():
 		_advance_danger(delta)
+	if _incoming_active() and not finished and not _offer_open():
+		_advance_incoming(delta)
 	position = home_position + _fx.shake_offset()
-	if _fx.is_busy() or position != home_position or (_danger_active() and not _danger.ghosts.is_empty()):
+	if _fx.is_busy() or position != home_position or (_danger_active() and not _danger.ghosts.is_empty()) or not _incoming.ghosts.is_empty():
 		queue_redraw()
 
 
@@ -560,7 +621,9 @@ func _draw() -> void:
 		_draw_atom(_cell_center(_hover), _queue[0], 0.45, Vector2i(-1, -1))
 
 	if _danger_active() and not finished:
-		_draw_danger_ghosts(font)
+		_draw_danger_ghosts(font, _danger, timed)
+	if _incoming_active() and not finished:
+		_draw_danger_ghosts(font, _incoming, true)
 
 	_fx.paint(self, board)
 
@@ -604,23 +667,25 @@ func _draw_cell_outline(p: Vector2i) -> void:
 
 
 ## True when the next drop is imminent (red countdown).
-func _danger_urgent() -> bool:
-	return _danger.countdown <= (WARN_SECONDS if timed else 1.0)
+func _danger_urgent(d: Danger, is_timed: bool) -> bool:
+	if d == _incoming:
+		return d.countdown <= 1.0 # the 3 s gap would be red the whole time
+	return d.countdown <= (WARN_SECONDS if is_timed else 1.0)
 
 
 ## The stray atoms that will drop soon: transparent, pulsing, with the placements left.
-func _draw_danger_ghosts(font: Font) -> void:
+func _draw_danger_ghosts(font: Font, d: Danger, is_timed: bool) -> void:
 	var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 220.0)
-	var urgent := _danger_urgent()
-	if urgent and timed:
+	var urgent := _danger_urgent(d, is_timed)
+	if urgent and is_timed:
 		pulse = 0.5 + 0.5 * sin(Time.get_ticks_msec() / 80.0) # faster flicker as time runs out
 	var tint := Palette.BAD if urgent else Palette.ORANGE
 	var line_scale := cell_size / 72.0
-	for g in _danger.ghosts:
+	for g in d.ghosts:
 		var center := _cell_center(g.cell)
 		_draw_atom(center, g.mask, 0.34 + 0.16 * pulse, Vector2i(-1, -1))
 		draw_arc(center, cell_size * 0.36, 0.0, TAU, 28, Color(tint, 0.35 + 0.4 * pulse), 2.5 * line_scale)
-		draw_string(font, center + Vector2(cell_size * 0.16, cell_size * 0.44), str(_danger.countdown_label()), HORIZONTAL_ALIGNMENT_LEFT, -1, int(15 * line_scale), tint)
+		draw_string(font, center + Vector2(cell_size * 0.16, cell_size * 0.44), str(d.countdown_label()), HORIZONTAL_ALIGNMENT_LEFT, -1, int(15 * line_scale), tint)
 
 
 func _draw_header(font: Font, board_px: Vector2) -> void:
@@ -642,11 +707,14 @@ func _draw_header(font: Font, board_px: Vector2) -> void:
 	draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(progression.xp / float(need), 0.0, 1.0), bar.size.y)), Palette.GOLD)
 	if _pending > 0:
 		draw_string(font, Vector2(0, -HEADER + 120), "INCOMING: %d" % _pending, HORIZONTAL_ALIGNMENT_RIGHT, board_px.x, 18, Palette.BAD)
+		if not _incoming.ghosts.is_empty():
+			var secs := "STRAY IN %ds" % _incoming.countdown_label()
+			draw_string(font, Vector2(0, -HEADER + 100), secs, HORIZONTAL_ALIGNMENT_RIGHT, board_px.x, 18, Palette.BAD if _danger_urgent(_incoming, true) else Palette.ORANGE)
 	elif _danger_active() and not _danger.ghosts.is_empty():
 		var count := _danger.ghosts.size()
 		var left := "%ds" % _danger.countdown_label() if timed else str(_danger.countdown_label())
 		var text := "STRAY IN %s" % left if count == 1 else "%d STRAYS IN %s" % [count, left]
-		draw_string(font, Vector2(0, -HEADER + 120), text, HORIZONTAL_ALIGNMENT_RIGHT, board_px.x, 18, Palette.BAD if _danger_urgent() else Palette.ORANGE)
+		draw_string(font, Vector2(0, -HEADER + 120), text, HORIZONTAL_ALIGNMENT_RIGHT, board_px.x, 18, Palette.BAD if _danger_urgent(_danger, timed) else Palette.ORANGE)
 	_draw_card_rows(font, board_px)
 
 

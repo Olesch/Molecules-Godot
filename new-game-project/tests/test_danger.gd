@@ -134,4 +134,22 @@ func _init() -> void:
 	td2.start(Board.new(8, 8), 11, rng)
 	_check(td2.ghosts.size() == 2, "two timed strays after level 10")
 
+	# Overrides (versus incoming): exactly one ghost, a fixed gap, no first-drop grace.
+	var ov := Danger.new()
+	ov.timed = true
+	ov.count_override = 1
+	ov.seconds_override = 3.0
+	ov.start(Board.new(8, 8), 15, rng) # level 15 would plan two ghosts and 6 s + grace
+	_check(ov.ghosts.size() == 1 and is_equal_approx(ov.countdown, 3.0), "overrides: one ghost, 3 s, no grace")
+	_check(ov.advance(2.9, Board.new(8, 8), rng).is_empty(), "override gap: nothing before 3 s")
+	var ov_drop := ov.advance(0.2, Board.new(8, 8), rng)
+	_check(ov_drop.size() == 1, "override gap: one atom after 3 s")
+	ov.seconds_override = 4.5
+	ov.schedule_next(Board.new(8, 8), 15, rng)
+	_check(ov.ghosts.size() == 1 and is_equal_approx(ov.countdown, 4.5), "schedule_next uses the override gap")
+	var nov := Danger.new()
+	nov.timed = true
+	nov.start(Board.new(8, 8), 1, rng)
+	_check(is_equal_approx(nov.countdown, Danger.seconds(1) + Danger.FIRST_GRACE_SECONDS), "without overrides nothing changes")
+
 	_finish()

@@ -42,7 +42,7 @@ func _init() -> void:
 
 	# Derived
 	m = Modifiers.new()
-	_check(m.queue_size() == 2 and m.garbage_cap() == Scoring.GARBAGE_PER_TURN and m.min_molecule() == 2, "defaults")
+	_check(m.queue_size() == 2 and is_equal_approx(m.incoming_gap_seconds(), Danger.INCOMING_BASE_SECONDS) and m.min_molecule() == 2, "defaults")
 	_check(is_equal_approx(m.bomb_chance(), Atoms.BOMB_CHANCE) and is_equal_approx(m.wild_chance(), Atoms.WILD_CHANCE), "base chances")
 	m = _mods({"long_view": 2, "overclock": 1})
 	_check(m.queue_size() == 3, "queue 2+2-1")
@@ -56,7 +56,9 @@ func _init() -> void:
 	_check(is_equal_approx(sw[sw.size() - 1], Atoms.SHAPE_WEIGHTS[Atoms.SHAPE_WEIGHTS.size() - 1] * 0.25) and sw[0] == Atoms.SHAPE_WEIGHTS[0], "shape weights")
 	_check(is_equal_approx(_mods({"high_scorer": 3, "overclock": 1}).score_mult(), 1.3 * 1.15), "score mult")
 	_check(is_equal_approx(_mods({"heavy_hitter": 2, "glass_cannon": 1}).attack_mult(), 1.2 * 1.5), "attack mult")
-	_check(_mods({"thick_skin": 2}).garbage_cap() == maxi(1, Scoring.GARBAGE_PER_TURN - 2), "garbage cap")
+	_check(is_equal_approx(_mods({"thick_skin": 2}).incoming_gap_seconds(), 4.0), "thick skin x2 slows incoming strays to 4 s")
+	_check(is_equal_approx(_mods({"shield": 1}).incoming_gap_seconds(), 4.5), "shield slows incoming strays by 50%")
+	_check(is_equal_approx(_mods({"thick_skin": 2, "shield": 1}).incoming_gap_seconds(), 6.0), "thick skin and shield stack")
 	_check(is_equal_approx(_mods({"glass_cannon": 1}).incoming_mult(), 1.25), "incoming mult")
 	_check(is_equal_approx(_mods({"efficient_cleaner": 3}).cancel_mult(), 2.5), "cancel mult")
 	_check(is_equal_approx(_mods({"fast_learner": 5}).xp_mult(), 1.5), "xp mult")

@@ -103,11 +103,18 @@ func _init() -> void:
 	pf._fx_rng.seed = 7 # fixed stray landing spots, so they never block the gardener pair below
 	pf.receive_attack(3)
 	_check(pf._pending == 3, "attack queues stray atoms")
+	_check(pf._incoming.ghosts.size() == 1, "exactly one incoming stray is announced")
+	var gap: float = pf.mods.incoming_gap_seconds()
+	_check(is_equal_approx(gap, 3.5), "thick skin lengthens the gap (%.1f s)" % gap)
 	pf._queue[0] = Atoms.N
 	pf.try_place(Vector2i(7, 7))
 	var filled := int(round(pf.board.fill_ratio() * 64.0))
-	_check(filled == 1 + mini(3, pf.mods.garbage_cap()), "strays land after a plain placement, capped by Thick Skin (%d atoms)" % filled)
-	_check(pf._stray.size() == mini(3, pf.mods.garbage_cap()), "stray cells are tracked")
+	_check(filled == 1 and pf._pending == 3, "a plain placement lands nothing any more")
+	for i in 3:
+		pf._process(gap / 3.0 + 0.01) # a bit more than the gap in total
+	filled = int(round(pf.board.fill_ratio() * 64.0))
+	_check(filled == 2 and pf._pending == 2, "one stray lands after the gap (%d atoms)" % filled)
+	_check(pf._stray.size() == 1, "stray cell is tracked")
 	var stray_before := pf._stray.size()
 	pf._queue[0] = Atoms.E
 	pf.try_place(Vector2i(2, 0))
@@ -117,7 +124,7 @@ func _init() -> void:
 	for c in pf._stray.keys():
 		if pf.board.get_atom(c) != 0:
 			stray_live += 1
-	_check(stray_live <= maxi(0, stray_before - 1) + 0 or pf._pending > 0, "gardener removed a stray atom (live %d of %d)" % [stray_live, stray_before])
+	_check(stray_live <= maxi(0, stray_before - 1), "gardener removed a stray atom (live %d of %d)" % [stray_live, stray_before])
 
 	# Rule cards reach the board.
 	pf.progression.mods.add("loose_ends")

@@ -2,10 +2,6 @@ class_name Scoring
 extends RefCounted
 ## Points and attack strength for a cleared molecule.
 
-## Hard limit on stray atoms that can land on a board in one turn.
-const GARBAGE_PER_TURN := 4
-
-
 ## The first atom of a molecule is worth 1 point, the second 2, the third 3, the fourth 4
 ## and every further atom 5.
 const MAX_ATOM_POINTS := 5

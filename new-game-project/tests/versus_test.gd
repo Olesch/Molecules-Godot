@@ -115,7 +115,8 @@ func _run(addr: String) -> void:
 		moves += 1
 		await wait(0.05)
 	if role == "join":
-		check("pending landed or cancelled", g._local._pending < 3, "pending=%d" % g._local._pending)
+		ok = await wait_until(func(): return g._local._pending < 3, 8.0) # first landing after ~3 s
+		check("pending landed or cancelled", ok, "pending=%d" % g._local._pending)
 	await wait(2.0)
 	# (3) hashes
 	var lh: int = hash(g._local.board.snapshot())

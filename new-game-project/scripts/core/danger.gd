@@ -19,9 +19,17 @@ const MIN_SECONDS := 5.0
 const SECONDS_PER_STEP := 1.5 ## the gap shrinks by this much every LEVELS_PER_STEP levels
 const FIRST_GRACE_SECONDS := 6.0
 
+## Versus: seconds between incoming stray atoms with no cards (Modifiers.incoming_gap_seconds adjusts it).
+const INCOMING_BASE_SECONDS := 3.0
+
 var timed := false ## true: countdown is in seconds and advance() runs it; false: placements and tick()
 var countdown := 0.0 ## placements (turn-based) or seconds (timed) left until the ghosts drop
 var ghosts: Array[Dictionary] = [] ## each {cell: Vector2i, mask: int}
+## > 0: always plan exactly this many ghosts instead of spawn_count(level) (versus incoming: 1).
+var count_override := 0
+## > 0 (timed): this is the gap used by start() and schedule_next() instead of seconds(level),
+## and start() adds no first-drop grace.
+var seconds_override := 0.0
 
 
 ## Placements between drops at the given level (level 1 = BASE_INTERVAL).
@@ -43,14 +51,17 @@ static func spawn_count(level: int) -> int:
 
 ## Starts a fresh game: first countdown (with grace) and the first ghosts.
 func start(board: Board, level: int, rng: RandomNumberGenerator) -> void:
-	countdown = seconds(level) + FIRST_GRACE_SECONDS if timed else float(interval(level) + FIRST_GRACE)
+	if timed and seconds_override > 0.0:
+		countdown = seconds_override
+	else:
+		countdown = seconds(level) + FIRST_GRACE_SECONDS if timed else float(interval(level) + FIRST_GRACE)
 	plan(board, level, rng)
 
 
 ## Chooses new ghosts on free cells (replacing the old ones).
 func plan(board: Board, level: int, rng: RandomNumberGenerator) -> void:
 	ghosts.clear()
-	for i in spawn_count(level):
+	for i in (count_override if count_override > 0 else spawn_count(level)):
 		var cell := _random_free_cell(board, rng)
 		if cell.x < 0:
 			break
@@ -59,7 +70,10 @@ func plan(board: Board, level: int, rng: RandomNumberGenerator) -> void:
 
 ## Sets the next countdown and plans the next ghosts; call after the drops were applied.
 func schedule_next(board: Board, level: int, rng: RandomNumberGenerator) -> void:
-	countdown = seconds(level) if timed else float(interval(level))
+	if timed and seconds_override > 0.0:
+		countdown = seconds_override
+	else:
+		countdown = seconds(level) if timed else float(interval(level))
 	plan(board, level, rng)
 
 

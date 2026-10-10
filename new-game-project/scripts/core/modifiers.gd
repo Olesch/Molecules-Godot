@@ -88,8 +88,9 @@ func attack_mult() -> float:
 	return (1.0 + 0.10 * count(Cards.HEAVY_HITTER)) * (1.5 if has(Cards.GLASS_CANNON) else 1.0)
 
 
-func garbage_cap() -> int:
-	return maxi(1, Scoring.GARBAGE_PER_TURN - count(Cards.THICK_SKIN))
+## Versus: seconds between incoming stray atoms. Thick Skin adds 0.5 s per level, Shield makes it 50% longer.
+func incoming_gap_seconds() -> float:
+	return (Danger.INCOMING_BASE_SECONDS + 0.5 * count(Cards.THICK_SKIN)) * (1.5 if has(Cards.SHIELD) else 1.0)
 
 
 func incoming_mult() -> float:
