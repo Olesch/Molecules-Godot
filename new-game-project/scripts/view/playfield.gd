@@ -624,7 +624,7 @@ func _draw() -> void:
 					draw_colored_polygon(_cell_poly(c), Color(Palette.BAD, 0.12))
 
 	# Hovering an atom lights up its molecule: cells with an open connection red, fully bonded blue.
-	if interactive and not finished and board.get_atom(_hover) != 0:
+	if interactive and not finished and board.in_bounds(_hover) and board.get_atom(_hover) != 0:
 		for c in board.molecule_at(_hover):
 			var is_open := false
 			for dir in topology.dir_count:
