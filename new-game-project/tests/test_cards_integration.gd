@@ -56,6 +56,25 @@ func _init() -> void:
 	pf.reroll_held()
 	_check(pf._queue[0] == after_reroll, "reroll is blocked while recharging")
 
+	# The Reroll button next to the held atom can be clicked (once recharged).
+	pf._reroll_cd = 0
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = pf.get_parent_global_offset() + pf.home_position + pf._reroll_center()
+	var held_before := pf._queue[0]
+	var tries := 0
+	while pf._queue[0] == held_before and tries < 40: # a reroll can hand back the same atom
+		pf._reroll_cd = 0
+		pf._unhandled_input(click)
+		tries += 1
+	_check(pf._queue[0] != held_before and pf._reroll_cd == Playfield.REROLL_COOLDOWN, "clicking the Reroll button rerolls and starts the cooldown")
+	click.position = pf.get_parent_global_offset() + pf.home_position + Vector2(300.0, 300.0)
+	var cd_now := pf._reroll_cd
+	pf._unhandled_input(click)
+	_check(pf._reroll_cd == maxi(0, cd_now - 1), "a click elsewhere only places an atom (the cooldown just ticks down)")
+	pf._reroll_cd = 0
+
 	# A real clear: score, XP and combo flag.
 	pf.board = Board.new(8, 8)
 	pf._queue[0] = Atoms.E

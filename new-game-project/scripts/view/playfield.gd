@@ -20,6 +20,8 @@ const LIFELINE_FILL := 0.78
 const LIFELINE_COOLDOWN := 4
 const CLEAR_STEP := 0.07 ## seconds between neighbouring atoms of a clearing molecule
 const CLEAR_MAX_TIME := 0.7 ## the whole wave never takes longer than this
+const REROLL_RADIUS := 22.0 ## the round Reroll button next to the held atom
+const REROLL_SLOT := 62.0 ## header width it takes, pushing the coming-up queue to the right
 const WARN_SECONDS := 3.0 ## timed mode: the warning sound and red countdown start this far ahead
 
 var cell_size := 72
@@ -50,6 +52,7 @@ var _fx_rng := RandomNumberGenerator.new() ## local only: effects and stray atom
 var _queue: Array[int] = []
 var _pending := 0 ## stray atoms waiting to land after this player's next plain placement
 var _hover := Vector2i(-1, -1)
+var _reroll_hover := false
 var _card_overlay: CardOverlay
 var _stash := 0
 var _reroll_cd := 0
@@ -190,12 +193,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseMotion:
 		_hover = _cell_at(event.position)
+		_reroll_hover = _reroll_hit(event.position)
 		queue_redraw()
 	elif event is InputEventMouseButton and event.pressed:
 		match event.button_index:
 			MOUSE_BUTTON_LEFT:
 				if finished:
 					restart_requested.emit()
+				elif _reroll_hit(event.position):
+					reroll_held()
 				else:
 					_hover = _cell_at(event.position)
 					try_place(_hover)
@@ -577,13 +583,18 @@ func _draw_danger_ghosts(font: Font) -> void:
 func _draw_header(font: Font, board_px: Vector2) -> void:
 	draw_string(font, Vector2(0, -HEADER + 28), "NOW", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Palette.DIM)
 	_draw_atom(Vector2(40, -HEADER + 78), _queue[0], 1.0, Vector2i(-1, -1), 1.0, 72)
-	draw_string(font, Vector2(120, -HEADER + 28), "COMING UP", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Palette.DIM)
+	var queue_x := 150.0
+	if mods.has(Cards.REROLL):
+		queue_x += REROLL_SLOT
+		_draw_reroll_button(font)
+	draw_string(font, Vector2(queue_x - 30.0, -HEADER + 28), "COMING UP", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Palette.DIM)
+	var spacing := minf(62.0, (board_px.x - 14.0 - queue_x) / maxf(1.0, _queue.size() - 2.0))
 	for i in range(1, _queue.size()):
-		_draw_atom(Vector2(150 + (i - 1) * 62, -HEADER + 78), _queue[i], 0.85, Vector2i(-1, -1), 0.6, 72)
+		_draw_atom(Vector2(queue_x + (i - 1) * spacing, -HEADER + 83), _queue[i], 0.85, Vector2i(-1, -1), 0.6, 72)
 	draw_string(font, Vector2(0, -HEADER + 40), "SCORE: %d" % score, HORIZONTAL_ALIGNMENT_RIGHT, board_px.x, 22, Palette.TEXT)
 	var need := Progression.xp_needed(progression.level)
-	draw_string(font, Vector2(board_px.x - 215, -HEADER + 67), "LV %d" % progression.level, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Palette.DIM)
-	var bar := Rect2(board_px.x - 160, -HEADER + 59, 160, 7)
+	draw_string(font, Vector2(board_px.x - 207, -HEADER + 57), "LV %d" % progression.level, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Palette.DIM)
+	var bar := Rect2(board_px.x - 160, -HEADER + 49, 160, 6)
 	draw_rect(bar, Palette.GRID)
 	draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(progression.xp / float(need), 0.0, 1.0), bar.size.y)), Palette.GOLD)
 	if _pending > 0:
@@ -594,6 +605,50 @@ func _draw_header(font: Font, board_px: Vector2) -> void:
 		var text := "STRAY IN %s" % left if count == 1 else "%d STRAYS IN %s" % [count, left]
 		draw_string(font, Vector2(0, -HEADER + 120), text, HORIZONTAL_ALIGNMENT_RIGHT, board_px.x, 18, Palette.BAD if _danger_urgent() else Palette.ORANGE)
 	_draw_card_rows(font, board_px)
+
+
+func _reroll_center() -> Vector2:
+	return Vector2(106.0, -HEADER + 78.0)
+
+
+## True if a click at this viewport position lands on the Reroll button.
+func _reroll_hit(viewport_pos: Vector2) -> bool:
+	if not mods.has(Cards.REROLL) or not interactive:
+		return false
+	var local := viewport_pos - get_parent_global_offset() - home_position
+	return local.distance_to(_reroll_center()) <= REROLL_RADIUS + 4.0
+
+
+## The Reroll card as a round button beside the held atom: two circling arrows, the key,
+## and a ring that fills while it recharges. Clicking it (or pressing X) rerolls.
+func _draw_reroll_button(font: Font) -> void:
+	var center := _reroll_center()
+	var ready := _reroll_cd == 0
+	var accent := Palette.PURPLE if ready else Palette.DIM
+	var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 260.0)
+	if ready:
+		draw_circle(center, REROLL_RADIUS + 3.0 + 2.0 * pulse, Color(accent, 0.12 + 0.10 * pulse))
+	draw_circle(center, REROLL_RADIUS, Palette.PANEL.lightened(0.12) if _reroll_hover and ready else Palette.PANEL)
+	draw_arc(center, REROLL_RADIUS, 0.0, TAU, 40, Color(accent, 0.45), 2.0)
+	if not ready:
+		var progress := 1.0 - float(_reroll_cd) / REROLL_COOLDOWN
+		draw_arc(center, REROLL_RADIUS, -PI / 2.0, -PI / 2.0 + TAU * progress, 40, Palette.PURPLE, 4.0)
+	var icon := Palette.TEXT if ready else Palette.DIM
+	var r := 10.0
+	draw_arc(center, r, deg_to_rad(215.0), deg_to_rad(335.0), 14, icon, 3.0)
+	_draw_arrow_head(center, r, deg_to_rad(335.0), icon)
+	draw_arc(center, r, deg_to_rad(35.0), deg_to_rad(155.0), 14, icon, 3.0)
+	_draw_arrow_head(center, r, deg_to_rad(155.0), icon)
+	var caption := "X" if ready else "in %d" % _reroll_cd
+	draw_string(font, center + Vector2(-30.0, REROLL_RADIUS + 15.0), caption, HORIZONTAL_ALIGNMENT_CENTER, 60.0, 13, Palette.TEXT if ready else Palette.DIM)
+
+
+## A small triangle at the end of a circular arc, pointing the way the arc runs (clockwise).
+func _draw_arrow_head(center: Vector2, radius: float, angle: float, color: Color) -> void:
+	var at := center + Vector2.from_angle(angle) * radius
+	var outward := Vector2.from_angle(angle)
+	var forward := Vector2.from_angle(angle + PI / 2.0)
+	draw_colored_polygon(PackedVector2Array([at + forward * 7.0, at + outward * 5.0, at - outward * 5.0]), color)
 
 
 ## Under the board: key hints for active cards and a chip for every owned card.
@@ -612,10 +667,6 @@ func _draw_card_rows(font: Font, board_px: Vector2) -> void:
 			_draw_atom(Vector2(x + 14.0, y - 5.0), _stash, 1.0, Vector2i(-1, -1), 0.4, 72)
 			x += 34.0
 		x += 14.0
-	if mods.has(Cards.REROLL):
-		var text := "[X] Reroll" if _reroll_cd == 0 else "[X] Reroll (%d)" % _reroll_cd
-		draw_string(font, Vector2(x, y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Palette.TEXT if _reroll_cd == 0 else hint_color)
-		x += font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x + 20.0
 	if mods.has(Cards.TWO_HAND):
 		draw_string(font, Vector2(x, y), "[Tab] Swap next", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Palette.TEXT)
 
