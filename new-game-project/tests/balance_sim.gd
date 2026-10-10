@@ -209,7 +209,7 @@ func take_turn(s: Seat, sizes: Dictionary) -> int:
 		return 0
 	var molecule := s.board.last_molecule_size
 	var blasted := cleared.size() - molecule
-	s.score += Scoring.points(molecule, blasted)
+	s.score += Scoring.points(molecule)
 	var key := clampi(molecule, 2, 5)
 	sizes[key] = sizes.get(key, 0) + 1
 	var outgoing := attack_amount(molecule, blasted)

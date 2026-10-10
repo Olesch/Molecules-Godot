@@ -150,9 +150,15 @@ func _init() -> void:
 	_check(b.last_molecule_size == 2, "last_molecule_size excludes blast victims (got %d)" % b.last_molecule_size)
 
 	# Scoring and attack formulas (regression: shift precedence once mixed up blast points).
-	_check(Scoring.points(4, 0) == 10, "4-molecule = 10 points")
-	_check(Scoring.points(2, 5) == 3 + 5, "blast victims add 1 each (got %d)" % Scoring.points(2, 5))
-	_check(Scoring.points(0, 0) == 0, "no molecule, no points")
+	_check(Scoring.atom_points(1) == 1 and Scoring.atom_points(2) == 2 and Scoring.atom_points(3) == 3 and Scoring.atom_points(4) == 4, "atoms 1 to 4 are worth 1 to 4 points")
+	_check(Scoring.atom_points(5) == 5 and Scoring.atom_points(9) == 5, "every atom from the fifth on is worth 5")
+	_check(Scoring.points(1) == 1 and Scoring.points(2) == 3 and Scoring.points(3) == 6 and Scoring.points(4) == 10, "molecules of 1 to 4 atoms")
+	_check(Scoring.points(5) == 15 and Scoring.points(6) == 20 and Scoring.points(7) == 25 and Scoring.points(10) == 40, "from 5 atoms on each atom adds 5 (15, 20, 25 ... 40)")
+	var summed := 0
+	for i in range(1, 9):
+		summed += Scoring.atom_points(i)
+	_check(summed == Scoring.points(8), "points(n) is the sum of its atoms' points")
+	_check(Scoring.points(0) == 0 and Scoring.points(-3) == 0, "no molecule, no points")
 	_check(Scoring.attack(2, 0) == 1 and Scoring.attack(4, 2) == 5 and Scoring.attack(0, 0) == 0, "attack formula")
 
 	# Garbage and snapshots.

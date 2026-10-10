@@ -57,7 +57,7 @@ static var DEFS: Dictionary = {
 	COMBO_CHAIN: _d("Combo Chain", _R, 1, "Clearing again within 3 placements gives x1.5 points"),
 	OVERCHARGE: _d("Overcharge", _R, 1, "A molecule of 4+ atoms puts a free bomb first in queue"),
 	LIFELINE: _d("Lifeline", _R, 1, "At 78%+ board fill the next atom becomes a wildcard (4 placement cooldown)"),
-	SALVAGE: _d("Salvage", _R, 1, "Blast victims count double for points and attack"),
+	SALVAGE: _d("Salvage", _R, 1, "Atoms wiped by blasts score 1 point each and count double for attack"),
 	SHIELD: _d("Shield", _R, 1, "Every 4th placement incoming strays are held back", true),
 	COUNTERSTRIKE: _d("Counterstrike", _R, 1, "When strays land on you, send 1 back", true),
 	GLASS_CANNON: _d("Glass Cannon", _R, 1, "+50% attack", true, true, "+25% incoming strays (rounded up)"),

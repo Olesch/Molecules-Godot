@@ -130,6 +130,7 @@ func scaled_attack(molecule_size: int, blasted: int) -> int:
 func scaled_points(molecule_size: int, blasted: int, combo_active: bool) -> int:
 	if molecule_size <= 0:
 		return 0
-	var raw := Scoring.triangle(molecule_size) + blasted * (2 if has(Cards.SALVAGE) else 1)
+	# Blast victims score nothing, except with Salvage (1 point each).
+	var raw := Scoring.points(molecule_size) + (blasted if has(Cards.SALVAGE) else 0)
 	var combo := 1.5 if has(Cards.COMBO_CHAIN) and combo_active else 1.0
 	return roundi(raw * score_mult() * big_game_mult() * combo)
