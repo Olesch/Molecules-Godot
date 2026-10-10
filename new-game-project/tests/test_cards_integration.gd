@@ -1,0 +1,113 @@
+extends SceneTree
+## Run: godot --headless --path new-game-project --script res://tests/test_cards_integration.gd
+## Drives the real Game/Playfield with cards: level-up offer, pick, stash, reroll, strays, gardener.
+
+var _failed := 0
+
+
+func _check(cond: bool, name: String) -> void:
+	if cond:
+		print("ok   ", name)
+	else:
+		print("FAIL ", name)
+		_failed += 1
+
+
+func _init() -> void:
+	var g = load("res://main.tscn").instantiate()
+	root.add_child(g)
+	await process_frame
+	g.solo_progress_path = "user://test_solo_progress.json" # never touch the real save
+	g._solo_progression = Progression.new()
+	g._on_menu_choose("solo", "")
+	await process_frame
+	await process_frame
+	var pf: Playfield = g._local
+	_check(pf != null and not pf.versus, "solo playfield created")
+
+	# Level up -> offer appears.
+	var gained := pf.progression.add_xp(500)
+	_check(gained > 0, "xp gives levels (%d)" % gained)
+	pf._maybe_offer()
+	_check(pf._card_overlay.is_open(), "offer overlay opens on level-up")
+	var free_cell := Vector2i(-1, -1)
+	for y in 8:
+		for x in 8:
+			if free_cell.x < 0 and pf.board.is_empty(Vector2i(x, y)):
+				free_cell = Vector2i(x, y)
+	pf.try_place(free_cell)
+	_check(pf.board.is_empty(free_cell), "board is locked while the offer is open")
+	var pending_before := pf.progression.pick_levels.size()
+	pf._on_card_picked("stash")
+	_check(pf.mods.has("stash"), "picked card is owned")
+	_check(pf.progression.pick_levels.size() == pending_before - 1, "pick consumes a pending level")
+
+	# Hold slot.
+	pf.progression.pick_levels.clear()
+	pf._card_overlay.hide_offer()
+	var held := pf._queue[0]
+	var size_before := pf._queue.size()
+	pf.stash_swap()
+	_check(pf._stash == held and pf._queue.size() == size_before, "stash stores the held atom and refills the queue")
+	var next_held := pf._queue[0]
+	pf.stash_swap()
+	_check(pf._queue[0] == held and pf._stash == next_held, "second stash swaps back")
+
+	# Queue size follows cards.
+	pf.progression.mods.add("long_view")
+	pf._fit_queue()
+	_check(pf._queue.size() == Modifiers.new().queue_size() + 1, "long view grows the queue")
+
+	# Reroll cooldown.
+	pf.progression.mods.add("reroll")
+	pf.reroll_held()
+	_check(pf._reroll_cd == Playfield.REROLL_COOLDOWN, "reroll starts its cooldown")
+	var after_reroll := pf._queue[0]
+	pf.reroll_held()
+	_check(pf._queue[0] == after_reroll, "reroll is blocked while recharging")
+
+	# A real clear: score, XP and combo flag.
+	pf.board = Board.new(8, 8)
+	pf._queue[0] = Atoms.E
+	pf.try_place(Vector2i(0, 0))
+	pf._queue[0] = Atoms.W
+	var score_before := pf.score
+	var xp_before := pf.progression.xp + pf.progression.level * 1000
+	pf.try_place(Vector2i(1, 0))
+	_check(pf.board.is_empty(Vector2i(0, 0)) and pf.board.is_empty(Vector2i(1, 0)), "pair clears through the playfield")
+	_check(pf.score - score_before == pf.mods.scaled_points(2, 0, false), "score uses the card modifiers (+%d)" % (pf.score - score_before))
+	_check(pf.progression.xp + pf.progression.level * 1000 > xp_before, "clear awards xp")
+	pf.progression.pick_levels.clear()
+	pf._card_overlay.hide_offer()
+
+	# Stray atoms and Gardener (versus rules).
+	pf.versus = true
+	pf.progression.mods.add("gardener")
+	pf.progression.mods.add("thick_skin")
+	pf.board = Board.new(8, 8)
+	pf.receive_attack(3)
+	_check(pf._pending == 3, "attack queues stray atoms")
+	pf._queue[0] = Atoms.N
+	pf.try_place(Vector2i(7, 7))
+	var filled := int(round(pf.board.fill_ratio() * 64.0))
+	_check(filled == 1 + mini(3, pf.mods.garbage_cap()), "strays land after a plain placement, capped by Thick Skin (%d atoms)" % filled)
+	_check(pf._stray.size() == mini(3, pf.mods.garbage_cap()), "stray cells are tracked")
+	var stray_before := pf._stray.size()
+	pf._queue[0] = Atoms.E
+	pf.try_place(Vector2i(2, 0))
+	pf._queue[0] = Atoms.W
+	pf.try_place(Vector2i(3, 0))
+	var stray_live := 0
+	for c in pf._stray.keys():
+		if pf.board.get_atom(c) != 0:
+			stray_live += 1
+	_check(stray_live <= maxi(0, stray_before - 1) + 0 or pf._pending > 0, "gardener removed a stray atom (live %d of %d)" % [stray_live, stray_before])
+
+	# Rule cards reach the board.
+	pf.progression.mods.add("loose_ends")
+	pf._apply_rules_to_board()
+	_check(pf.board.max_open_ends == 1, "loose ends propagates to the board")
+
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://test_solo_progress.json"))
+	print("failures: ", _failed)
+	quit(1 if _failed > 0 else 0)

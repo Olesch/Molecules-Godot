@@ -188,5 +188,27 @@ func _init() -> void:
 	b.place(Vector2i(0, 0), N)
 	_check(is_equal_approx(b.fill_ratio(), 0.25), "one of four cells = 0.25")
 
+	# Rule knobs used by cards: loose ends, minimum molecule size, remove_atom.
+	b = Board.new(4, 4)
+	b.max_open_ends = 1
+	b.place(Vector2i(0, 0), E | S) # one open end (south)
+	_check(b.place(Vector2i(1, 0), W).size() == 2, "loose ends: one open connection still clears")
+	b = Board.new(4, 4)
+	b.max_open_ends = 1
+	b.place(Vector2i(0, 0), E | S | N)
+	_check(b.place(Vector2i(1, 0), W).is_empty(), "loose ends: two open connections do not clear")
+	b = Board.new(4, 4)
+	b.min_molecule = 3
+	b.place(Vector2i(0, 0), E)
+	_check(b.place(Vector2i(1, 0), W).is_empty() and b.get_atom(Vector2i(0, 0)) != 0, "big game: closed pair stays on the board")
+	b = Board.new(4, 4)
+	b.min_molecule = 3
+	b.place(Vector2i(0, 0), E)
+	b.place(Vector2i(2, 0), W)
+	_check(b.place(Vector2i(1, 0), Atoms.WILD).size() == 3, "big game: a 3-atom molecule clears")
+	b = Board.new(2, 2)
+	b.place(Vector2i(1, 1), N)
+	_check(b.remove_atom(Vector2i(1, 1)) == N and b.is_empty(Vector2i(1, 1)) and b.remove_atom(Vector2i(5, 5)) == 0, "remove_atom")
+
 	print("failures: ", _failed)
 	quit(1 if _failed > 0 else 0)

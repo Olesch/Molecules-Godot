@@ -13,6 +13,7 @@ var _solo_btn: Button
 var _host_btn: Button
 var _join_btn: Button
 var _cancel_btn: Button
+var _reset_btn: Button
 var _address: LineEdit
 var _status: Label
 
@@ -76,6 +77,11 @@ func _init() -> void:
 	_cancel_btn.visible = false
 	box.add_child(_cancel_btn)
 
+	_reset_btn = _make_button("Reset solo progress", Color("8f98a8"))
+	_reset_btn.add_theme_font_size_override("font_size", 13)
+	_reset_btn.pressed.connect(func() -> void: choose.emit("reset_progress", ""))
+	box.add_child(_reset_btn)
+
 	_spacer(box, 10)
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -114,6 +120,7 @@ func set_busy(busy: bool) -> void:
 	_solo_btn.disabled = busy
 	_host_btn.disabled = busy
 	_join_btn.disabled = busy
+	_reset_btn.disabled = busy
 	_address.editable = not busy
 	_cancel_btn.visible = busy
 

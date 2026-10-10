@@ -13,6 +13,7 @@ const BAD := Color("ff5d5d")
 const LOCAL_CELL := 72
 const REMOTE_CELL := 40
 const MARGIN := 40.0
+const SOLO_PROGRESS_PATH := "user://solo_progress.json"
 
 enum Mode { MENU, SOLO, HOSTING, JOINING, VERSUS }
 
@@ -25,6 +26,8 @@ var _sfx := {}
 var _mixer: MusicMixer
 var _sfx_rng := RandomNumberGenerator.new()
 var _waiting_for_rematch := false
+var _solo_progression: Progression
+var solo_progress_path := SOLO_PROGRESS_PATH
 
 
 func _ready() -> void:
@@ -74,7 +77,7 @@ func _draw() -> void:
 	var size := get_viewport_rect().size
 	draw_rect(Rect2(Vector2(-60, -60), size + Vector2(120, 120)), BG_COLOR)
 	if _mode == Mode.SOLO or _mode == Mode.VERSUS:
-		draw_string(ThemeDB.fallback_font, Vector2(MARGIN, size.y - 20), "Click: place   R / right-click / wheel: rotate   M: music   Esc: menu", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, DIM_TEXT)
+		draw_string(ThemeDB.fallback_font, Vector2(MARGIN, size.y - 20), "Click: place   R / right-click / wheel: rotate   M: music   Esc: menu   Cards: H stash, X reroll, Tab swap", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, DIM_TEXT)
 
 
 func _layout() -> void:
@@ -94,12 +97,15 @@ func _layout() -> void:
 
 # --- Sessions ---------------------------------------------------------------
 
-func _make_local() -> void:
+func _make_local(progression: Progression, versus: bool) -> void:
 	_free_playfields()
 	_local = Playfield.new()
 	_local.cell_size = LOCAL_CELL
 	_local.interactive = true
+	_local.progression = progression
+	_local.versus = versus
 	add_child(_local)
+	_local.progression_changed.connect(_on_progression_changed)
 	_local.sfx_requested.connect(_play)
 	_local.lost.connect(_on_local_lost)
 	_local.restart_requested.connect(_on_restart_requested)
@@ -123,7 +129,9 @@ func _process(_delta: float) -> void:
 func _start_solo() -> void:
 	_mode = Mode.SOLO
 	_menu.visible = false
-	_make_local()
+	if _solo_progression == null:
+		_solo_progression = Progression.load_from(solo_progress_path)
+	_make_local(_solo_progression, false)
 	_layout()
 	_local.start(randi())
 	_mixer.restart()
@@ -132,7 +140,7 @@ func _start_solo() -> void:
 func _enter_versus() -> void:
 	_mode = Mode.VERSUS
 	_menu.visible = false
-	_make_local()
+	_make_local(Progression.new(), true)
 	_local.attack.connect(_net.send_attack)
 	_local.board_changed.connect(_net.send_snapshot)
 	_remote = Playfield.new()
@@ -179,6 +187,10 @@ func _on_menu_choose(mode: String, address: String) -> void:
 			_mode = Mode.JOINING
 			_menu.set_busy(true)
 			_menu.set_status(_menu.get_default_status_for("join"))
+		"reset_progress":
+			_solo_progression = Progression.new()
+			_solo_progression.save_to(solo_progress_path)
+			_menu.set_status("Solo level and cards reset.")
 		"cancel":
 			_net.close()
 			_mode = Mode.MENU
@@ -205,6 +217,7 @@ func _on_game_start(seed_value: int) -> void:
 	if _mode != Mode.VERSUS:
 		return
 	_waiting_for_rematch = false
+	_local.progression = Progression.new() # versus levels only last for one match
 	_local.start(seed_value)
 	_remote.start(seed_value)
 	_mixer.restart()
@@ -236,6 +249,11 @@ func _on_peer_lost() -> void:
 
 
 # --- Local player events ----------------------------------------------------
+
+func _on_progression_changed() -> void:
+	if _mode == Mode.SOLO and _solo_progression != null:
+		_solo_progression.save_to(solo_progress_path)
+
 
 func _on_local_lost() -> void:
 	if _mode == Mode.VERSUS:

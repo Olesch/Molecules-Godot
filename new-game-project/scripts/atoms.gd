@@ -67,14 +67,15 @@ static func is_wild(atom: int) -> bool:
 	return (atom & WILD) != 0
 
 
-static func random_atom(rng: RandomNumberGenerator) -> int:
-	if rng.randf() < WILD_CHANCE:
+## Chances and shape weights can be overridden (powerup cards change them).
+static func random_atom(rng: RandomNumberGenerator, bomb_chance := BOMB_CHANCE, wild_chance := WILD_CHANCE, weights := SHAPE_WEIGHTS) -> int:
+	if rng.randf() < wild_chance:
 		return WILD
-	var atom := random_shape(rng)
-	if rng.randf() < BOMB_CHANCE:
+	var atom := random_shape(rng, weights)
+	if rng.randf() < bomb_chance:
 		atom |= BOMB
 	return atom
 
 
-static func random_shape(rng: RandomNumberGenerator) -> int:
-	return SHAPES[rng.rand_weighted(SHAPE_WEIGHTS)]
+static func random_shape(rng: RandomNumberGenerator, weights := SHAPE_WEIGHTS) -> int:
+	return SHAPES[rng.rand_weighted(weights)]

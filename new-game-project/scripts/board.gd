@@ -5,6 +5,10 @@ extends RefCounted
 
 var width: int
 var height: int
+## Rules that powerup cards can bend: open connections a molecule may still have
+## when it clears, and the minimum number of atoms for a molecule to clear.
+var max_open_ends := 0
+var min_molecule := 2
 var _cells: Array[int] = []
 ## Masks of the atoms removed by the last place() call, parallel to its returned cells.
 var last_cleared_masks: Array[int] = []
@@ -138,16 +142,31 @@ func molecule_at(p: Vector2i) -> Array[Vector2i]:
 	return group
 
 
-## A group is closed when every connection of every member is bonded.
+## A group is closed when it has at least min_molecule atoms and at most
+## max_open_ends unbonded connections (0 by default: every connection bonded).
 ## A lone atom (e.g. a wildcard) never counts.
 func is_closed(group: Array[Vector2i]) -> bool:
-	if group.size() < 2:
+	if group.size() < maxi(min_molecule, 2):
 		return false
+	return open_end_count(group) <= max_open_ends
+
+
+func open_end_count(group: Array[Vector2i]) -> int:
+	var open := 0
 	for c in group:
 		for dir in 4:
 			if (get_atom(c) & (1 << dir)) and not is_bonded(c, dir):
-				return false
-	return true
+				open += 1
+	return open
+
+
+## Empties a cell and returns the atom that was there (0 if it was empty).
+func remove_atom(p: Vector2i) -> int:
+	if not in_bounds(p):
+		return 0
+	var old := get_atom(p)
+	_cells[p.y * width + p.x] = 0
+	return old
 
 
 ## Scatters up to count random atoms with random rotation, skipping any that would
