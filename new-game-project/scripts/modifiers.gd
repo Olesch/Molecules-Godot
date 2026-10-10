@@ -48,15 +48,15 @@ static func from_dict(d) -> Modifiers:
 
 
 func queue_size() -> int:
-	return clampi(4 + count("long_view") - count("overclock"), 2, 8)
+	return clampi(4 + count("long_view") - 2 * count("overclock"), 2, 8)
 
 
 func bomb_chance() -> float:
-	return Atoms.BOMB_CHANCE + count("demolition") * 0.04 + count("hot_potato") * 0.10
+	return Atoms.BOMB_CHANCE + count("demolition") * 0.02 + count("hot_potato") * 0.08
 
 
 func wild_chance() -> float:
-	return maxf(0.0, Atoms.WILD_CHANCE + count("joker_supply") * 0.03 - count("hot_potato") * 0.05)
+	return maxf(0.0, Atoms.WILD_CHANCE + count("joker_supply") * 0.02 - count("hot_potato") * 0.07)
 
 
 func shape_weights() -> Array[float]:
@@ -69,7 +69,7 @@ func shape_weights() -> Array[float]:
 
 
 func score_mult() -> float:
-	return (1.0 + 0.10 * count("high_scorer")) * (1.25 if has("overclock") else 1.0)
+	return (1.0 + 0.10 * count("high_scorer")) * (1.15 if has("overclock") else 1.0)
 
 
 func attack_mult() -> float:
@@ -105,7 +105,7 @@ func min_molecule() -> int:
 
 
 func big_game_mult() -> float:
-	return 3.0 if has("big_game") else 1.0
+	return 2.0 if has("big_game") else 1.0
 
 
 func scaled_attack(molecule_size: int, blasted: int) -> int:

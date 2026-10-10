@@ -192,7 +192,12 @@ func _init() -> void:
 	b = Board.new(4, 4)
 	b.max_open_ends = 1
 	b.place(Vector2i(0, 0), E | S) # one open end (south)
-	_check(b.place(Vector2i(1, 0), W).size() == 2, "loose ends: one open connection still clears")
+	_check(b.place(Vector2i(1, 0), W).is_empty(), "loose ends: a pair must still be fully closed")
+	b = Board.new(4, 4)
+	b.max_open_ends = 1
+	b.place(Vector2i(0, 0), E | S) # one open end (south)
+	b.place(Vector2i(2, 0), W)
+	_check(b.place(Vector2i(1, 0), Atoms.WILD).size() == 3, "loose ends: a 3-atom molecule clears with one open connection")
 	b = Board.new(4, 4)
 	b.max_open_ends = 1
 	b.place(Vector2i(0, 0), E | S | N)

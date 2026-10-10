@@ -3,7 +3,7 @@ extends RefCounted
 ## Points and attack strength for a cleared molecule.
 
 ## Hard limit on stray atoms that can land on a board in one turn.
-const GARBAGE_PER_TURN := 5
+const GARBAGE_PER_TURN := 4
 
 
 static func triangle(n: int) -> int:

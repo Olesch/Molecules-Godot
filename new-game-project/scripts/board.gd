@@ -142,13 +142,18 @@ func molecule_at(p: Vector2i) -> Array[Vector2i]:
 	return group
 
 
+## Molecules need this many atoms before max_open_ends applies; smaller ones must be fully closed.
+const LOOSE_MIN_SIZE := 3
+
 ## A group is closed when it has at least min_molecule atoms and at most
-## max_open_ends unbonded connections (0 by default: every connection bonded).
+## max_open_ends unbonded connections (0 by default: every connection bonded;
+## the allowance only applies to groups of LOOSE_MIN_SIZE+ atoms).
 ## A lone atom (e.g. a wildcard) never counts.
 func is_closed(group: Array[Vector2i]) -> bool:
 	if group.size() < maxi(min_molecule, 2):
 		return false
-	return open_end_count(group) <= max_open_ends
+	var allowed := max_open_ends if group.size() >= LOOSE_MIN_SIZE else 0
+	return open_end_count(group) <= allowed
 
 
 func open_end_count(group: Array[Vector2i]) -> int:

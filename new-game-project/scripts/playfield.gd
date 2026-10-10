@@ -15,9 +15,9 @@ const BOARD_W := 8
 const BOARD_H := 8
 const HEADER := 130
 const PREPLACED := 10
-const REROLL_COOLDOWN := 6 ## placements before Reroll recharges
-const LIFELINE_FILL := 0.85
-const LIFELINE_COOLDOWN := 5
+const REROLL_COOLDOWN := 4 ## placements before Reroll recharges
+const LIFELINE_FILL := 0.78
+const LIFELINE_COOLDOWN := 4
 const SHAKE_MAX := 22.0
 const POP_TIME := 0.18
 
@@ -366,7 +366,7 @@ func _celebrate(cleared: Array[Vector2i]) -> void:
 	_since_clear = 0
 	if mods.has("gardener"):
 		_remove_random_stray()
-	if mods.has("overcharge") and molecule >= 5:
+	if mods.has("overcharge") and molecule >= 4:
 		_queue.insert(0, Atoms.random_shape(_queue_rng, mods.shape_weights()) | Atoms.BOMB)
 		_fit_queue()
 		sfx_requested.emit("clear", 1.3)
