@@ -20,6 +20,8 @@ const LIFELINE_FILL := 0.78
 const LIFELINE_COOLDOWN := 4
 const SHAKE_MAX := 22.0
 const POP_TIME := 0.18
+const CLEAR_STEP := 0.07 ## seconds between neighbouring atoms of a clearing molecule
+const CLEAR_MAX_TIME := 0.7 ## the whole wave never takes longer than this
 
 const COLORS: Array[Color] = [
 	Color("6ab04c"), # 1 connection
@@ -73,6 +75,8 @@ var _fx: Array[Dictionary] = []
 var _popups: Array[Dictionary] = []
 var _pop_age := {} # Vector2i -> seconds since the atom was placed
 var _trauma := 0.0
+var _ghosts: Array[Dictionary] = [] # cleared atoms still shown until the clear wave reaches them
+var _offer_wait := 0.0 ## seconds to hold back a level-up card pick so the clear animation can play
 
 
 func _ready() -> void:
@@ -110,6 +114,8 @@ func start(seed_value: int) -> void:
 	_fx.clear()
 	_popups.clear()
 	_pop_age.clear()
+	_ghosts.clear()
+	_offer_wait = 0.0
 	queue_redraw()
 	if interactive:
 		board_changed.emit(board.snapshot())
@@ -332,24 +338,27 @@ func _celebrate(cleared: Array[Vector2i]) -> void:
 	var combo := _since_clear <= 3 # placements since the previous clear
 	var points := mods.scaled_points(molecule, blasted, combo)
 	score += points
+	# The clear spreads from the placed atom through the molecule: every atom stays visible
+	# as a ghost until the wave reaches it (see _fire_ghost).
 	var sum := Vector2.ZERO
+	var depths := board.last_clear_depths
+	var max_depth := 0
+	for d in depths:
+		max_depth = maxi(max_depth, d)
+	var step := minf(CLEAR_STEP, CLEAR_MAX_TIME / maxf(1.0, max_depth))
 	for i in cleared.size():
-		var center := _cell_center(cleared[i])
-		sum += center
-		var body := _atom_color(board.last_cleared_masks[i])
-		_burst(center, body, 14, 300.0)
-		_fx.append({"kind": 1, "pos": center, "age": 0.0, "life": 0.4, "color": body, "size": 0.0, "vel": Vector2.ZERO})
-	for bomb in board.last_exploded:
-		var at := _cell_center(bomb)
-		_burst(at, BLAST_COLOR, 36, 520.0)
-		_fx.append({"kind": 1, "pos": at, "age": 0.0, "life": 0.55, "color": BLAST_COLOR, "size": 0.0, "vel": Vector2.ZERO, "grow": 2.4})
-	if not board.last_exploded.is_empty():
-		sfx_requested.emit("explode", 1.0)
-		_trauma = 1.0
+		sum += _cell_center(cleared[i])
+		_ghosts.append({
+			"cell": cleared[i],
+			"mask": board.last_cleared_masks[i],
+			"delay": depths[i] * step,
+			"age": 0.0,
+			"parent": board.last_clear_parents[i],
+		})
 	var popup_text := "+%d" % points
 	if combo and mods.has("combo_chain"):
 		popup_text += " COMBO!"
-	_popups.append({"pos": sum / cleared.size(), "age": 0.0, "text": popup_text})
+	_popups.append({"pos": sum / cleared.size(), "age": -max_depth * step, "text": popup_text})
 	sfx_requested.emit("clear", clampf(0.9 + 0.06 * (cleared.size() - 2), 0.8, 1.5))
 	_trauma = minf(1.0, _trauma + 0.25 + 0.06 * cleared.size())
 
@@ -372,6 +381,7 @@ func _celebrate(cleared: Array[Vector2i]) -> void:
 		sfx_requested.emit("clear", 1.3)
 	if progression.add_xp(points) > 0:
 		sfx_requested.emit("clear", 1.5)
+		_offer_wait = max_depth * step + 0.6
 	progression_changed.emit()
 
 
@@ -401,6 +411,8 @@ func _offer_open() -> bool:
 func _maybe_offer() -> void:
 	if _card_overlay == null or _card_overlay.is_open() or finished or not progression.has_pending_pick():
 		return
+	if _offer_wait > 0.0 or not _ghosts.is_empty():
+		return # _process tries again once the clear animation is done
 	var cards: Array[Dictionary] = []
 	for id in progression.roll_offer(_fx_rng, versus):
 		cards.append(Cards.describe(id, progression.mods.count(id)))
@@ -421,6 +433,24 @@ func _on_card_picked(card_id: String) -> void:
 		progression_changed.emit()
 		queue_redraw()
 	_maybe_offer()
+
+
+## The clear wave reaches an atom: it bursts, and a spark runs along the bond it came through.
+func _fire_ghost(ghost: Dictionary) -> void:
+	var cell: Vector2i = ghost.cell
+	var mask: int = ghost.mask
+	var center := _cell_center(cell)
+	var body := _atom_color(mask)
+	_burst(center, body, 14, 300.0)
+	_fx.append({"kind": 1, "pos": center, "age": 0.0, "life": 0.4, "color": body, "size": 0.0, "vel": Vector2.ZERO})
+	var parent: Vector2i = ghost.parent
+	if parent.x >= 0:
+		_fx.append({"kind": 2, "pos": _cell_center(parent), "to": center, "age": 0.0, "life": 0.22, "color": Color.WHITE, "size": 0.0, "vel": Vector2.ZERO})
+	if Atoms.is_bomb(mask):
+		_burst(center, BLAST_COLOR, 36, 520.0)
+		_fx.append({"kind": 1, "pos": center, "age": 0.0, "life": 0.55, "color": BLAST_COLOR, "size": 0.0, "vel": Vector2.ZERO, "grow": 2.4})
+		sfx_requested.emit("explode", 1.0)
+		_trauma = 1.0
 
 
 func _lose() -> void:
@@ -462,10 +492,21 @@ func _process(delta: float) -> void:
 		if f.age >= f.life:
 			_fx.remove_at(i)
 			continue
+		if f.kind != 0:
+			continue # rings and sparks do not fall
 		var vel: Vector2 = f.vel
 		vel = vel * maxf(0.0, 1.0 - 3.0 * delta) + Vector2(0.0, 380.0 * cell_size / 72.0) * delta
 		f.vel = vel
 		f.pos += vel * delta
+	_offer_wait = maxf(0.0, _offer_wait - delta)
+	if _offer_wait == 0.0 and _ghosts.is_empty() and progression.has_pending_pick():
+		_maybe_offer()
+	for i in range(_ghosts.size() - 1, -1, -1):
+		var ghost := _ghosts[i]
+		ghost.age += delta
+		if ghost.age >= ghost.delay:
+			_fire_ghost(ghost)
+			_ghosts.remove_at(i)
 	for i in range(_popups.size() - 1, -1, -1):
 		_popups[i].age += delta
 		if _popups[i].age >= 0.9:
@@ -475,7 +516,7 @@ func _process(delta: float) -> void:
 		if _pop_age[cell] >= POP_TIME:
 			_pop_age.erase(cell)
 
-	if not (_fx.is_empty() and _popups.is_empty() and _pop_age.is_empty()) or _trauma > 0.0 or position != home_position:
+	if not (_fx.is_empty() and _popups.is_empty() and _pop_age.is_empty() and _ghosts.is_empty()) or _trauma > 0.0 or position != home_position:
 		queue_redraw()
 
 
@@ -502,6 +543,7 @@ func _draw() -> void:
 			draw_rect(area, Color(BLAST_COLOR, 0.5), false, 2.0)
 		_draw_atom(_cell_center(_hover), _queue[0], 0.45, Vector2i(-1, -1))
 
+	_draw_ghosts()
 	_draw_fx(font)
 
 	# Incoming stray atoms waiting to land: red blocks along the left edge.
@@ -604,6 +646,17 @@ func _pop_scale(p: Vector2i) -> float:
 	return 0.3 + 0.7 * (1.0 + 2.70158 * x * x * x + 1.70158 * x * x)
 
 
+## Cleared atoms waiting for the wave; they swell and glow just before they pop.
+func _draw_ghosts() -> void:
+	for g in _ghosts:
+		var center := _cell_center(g.cell)
+		var lead: float = g.delay - g.age # seconds until the wave arrives
+		var charge := clampf(1.0 - lead / 0.1, 0.0, 1.0)
+		_draw_atom(center, g.mask, 1.0, Vector2i(-1, -1), 1.0 + 0.2 * charge)
+		if charge > 0.0:
+			draw_arc(center, cell_size * (0.3 + 0.1 * charge), 0.0, TAU, 24, Color(1, 1, 1, 0.8 * charge), 3.0 * cell_size / 72.0)
+
+
 func _draw_fx(font: Font) -> void:
 	for f in _fx:
 		var k: float = f.age / f.life
@@ -611,9 +664,15 @@ func _draw_fx(font: Font) -> void:
 		col.a = 1.0 - k
 		if f.kind == 0:
 			draw_circle(f.pos, f.size * (1.0 - 0.6 * k), col)
+		elif f.kind == 2:
+			var head: Vector2 = f.pos.lerp(f.to, minf(1.0, k * 2.0))
+			var tail: Vector2 = f.pos.lerp(f.to, clampf(k * 2.0 - 0.5, 0.0, 1.0))
+			draw_line(tail, head, col, (7.0 - 4.0 * k) * cell_size / 72.0)
 		else:
 			draw_arc(f.pos, lerpf(cell_size * 0.2, cell_size * 0.95 * f.get("grow", 1.0), k), 0.0, TAU, 32, col, (6.0 * (1.0 - k) + 1.0) * cell_size / 72.0)
 	for pop in _popups:
+		if pop.age < 0.0:
+			continue
 		var k: float = pop.age / 0.9
 		var col := Color("ffe27a")
 		col.a = 1.0 - k * k

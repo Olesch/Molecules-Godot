@@ -12,6 +12,10 @@ var min_molecule := 2
 var _cells: Array[int] = []
 ## Masks of the atoms removed by the last place() call, parallel to its returned cells.
 var last_cleared_masks: Array[int] = []
+## How the last clear spreads, parallel to place()'s result: bonds away from the placed
+## atom (blast victims count from their bomb) and the cell each atom was reached from.
+var last_clear_depths: Array[int] = []
+var last_clear_parents: Array[Vector2i] = []
 ## Cells of the bombs that exploded during the last place() call.
 var last_exploded: Array[Vector2i] = []
 ## Number of atoms in the molecule closed by the last place() call (0 if none); blasted extras not included.
@@ -86,6 +90,8 @@ func is_linked(p: Vector2i, dir: int) -> bool:
 func place(p: Vector2i, mask: int) -> Array[Vector2i]:
 	var cleared: Array[Vector2i] = []
 	last_cleared_masks.clear()
+	last_clear_depths.clear()
+	last_clear_parents.clear()
 	last_exploded.clear()
 	last_molecule_size = 0
 	if not _is_valid_atom(mask) or not is_empty(p):
@@ -95,9 +101,13 @@ func place(p: Vector2i, mask: int) -> Array[Vector2i]:
 	if is_closed(group):
 		last_molecule_size = group.size()
 		var removed: Array[Vector2i] = group.duplicate()
+		var tree := _link_tree(p)
+		var depth_of := {}
 		var bombs: Array[Vector2i] = []
 		for c in group:
-			bombs.append_array(_remove(c, removed, false))
+			var node: Dictionary = tree[c]
+			depth_of[c] = node.depth
+			bombs.append_array(_remove(c, removed, false, node.depth, node.parent))
 		while not bombs.is_empty():
 			var bomb: Vector2i = bombs.pop_back()
 			last_exploded.append(bomb)
@@ -105,15 +115,37 @@ func place(p: Vector2i, mask: int) -> Array[Vector2i]:
 				for dx in range(-Atoms.BLAST_RADIUS, Atoms.BLAST_RADIUS + 1):
 					var n := bomb + Vector2i(dx, dy)
 					if in_bounds(n) and get_atom(n) != 0:
-						bombs.append_array(_remove(n, removed, true))
+						var reach := maxi(absi(dx), absi(dy))
+						depth_of[n] = int(depth_of[bomb]) + reach
+						bombs.append_array(_remove(n, removed, true, depth_of[n], bomb))
 		return removed
 	return cleared
 
 
-## Empties a cell, records its mask, and returns it in an array if it was a bomb.
-func _remove(c: Vector2i, removed: Array[Vector2i], add_to_removed: bool) -> Array[Vector2i]:
+## Breadth-first walk over the molecule from p: cell -> {depth, parent}.
+## depth is the number of bonds from p; the origin's parent is (-1, -1).
+func _link_tree(p: Vector2i) -> Dictionary:
+	var tree := {p: {"depth": 0, "parent": Vector2i(-1, -1)}}
+	var queue: Array[Vector2i] = [p]
+	var head := 0
+	while head < queue.size():
+		var cur := queue[head]
+		head += 1
+		for dir in 4:
+			if is_linked(cur, dir):
+				var n: Vector2i = cur + Atoms.OFFSETS[dir]
+				if not tree.has(n):
+					tree[n] = {"depth": int(tree[cur].depth) + 1, "parent": cur}
+					queue.append(n)
+	return tree
+
+
+## Empties a cell, records its mask, depth and parent, and returns it in an array if it was a bomb.
+func _remove(c: Vector2i, removed: Array[Vector2i], add_to_removed: bool, depth: int, parent: Vector2i) -> Array[Vector2i]:
 	var atom := get_atom(c)
 	last_cleared_masks.append(atom)
+	last_clear_depths.append(depth)
+	last_clear_parents.append(parent)
 	_cells[c.y * width + c.x] = 0
 	if add_to_removed:
 		removed.append(c)

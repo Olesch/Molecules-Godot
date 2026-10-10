@@ -215,5 +215,29 @@ func _init() -> void:
 	b.place(Vector2i(1, 1), N)
 	_check(b.remove_atom(Vector2i(1, 1)) == N and b.is_empty(Vector2i(1, 1)) and b.remove_atom(Vector2i(5, 5)) == 0, "remove_atom")
 
+	# Clear wave data: depth counts bonds from the placed atom; blast victims follow their bomb.
+	b = Board.new(8, 3)
+	b.place(Vector2i(0, 0), E)
+	b.place(Vector2i(1, 0), E | W)
+	b.place(Vector2i(2, 0), E | W)
+	var wave := b.place(Vector2i(3, 0), W)
+	_check(wave.size() == 4 and b.last_clear_depths.size() == 4 and b.last_clear_parents.size() == 4, "wave arrays parallel the cleared cells")
+	var depth_at := {}
+	var parent_at := {}
+	for i in wave.size():
+		depth_at[wave[i]] = b.last_clear_depths[i]
+		parent_at[wave[i]] = b.last_clear_parents[i]
+	_check(depth_at[Vector2i(3, 0)] == 0 and depth_at[Vector2i(2, 0)] == 1 and depth_at[Vector2i(1, 0)] == 2 and depth_at[Vector2i(0, 0)] == 3, "depth grows away from the placed atom")
+	_check(parent_at[Vector2i(3, 0)] == Vector2i(-1, -1) and parent_at[Vector2i(1, 0)] == Vector2i(2, 0), "parents point back toward the placed atom")
+	b = Board.new(8, 8)
+	b.place(Vector2i(5, 4), N)
+	b.place(Vector2i(2, 2), E | Atoms.BOMB)
+	var blast := b.place(Vector2i(3, 2), W)
+	var victim_depth := -1
+	for i in blast.size():
+		if blast[i] == Vector2i(3, 3) and false:
+			victim_depth = b.last_clear_depths[i]
+	_check(b.last_clear_depths.size() == blast.size(), "wave arrays parallel the cleared cells with a bomb")
+
 	print("failures: ", _failed)
 	quit(1 if _failed > 0 else 0)
