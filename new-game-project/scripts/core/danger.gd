@@ -54,7 +54,7 @@ func plan(board: Board, level: int, rng: RandomNumberGenerator) -> void:
 		var cell := _random_free_cell(board, rng)
 		if cell.x < 0:
 			break
-		ghosts.append({"cell": cell, "mask": _random_stray(rng)})
+		ghosts.append({"cell": cell, "mask": _random_stray(rng, board.topology)})
 
 
 ## Sets the next countdown and plans the next ghosts; call after the drops were applied.
@@ -132,8 +132,8 @@ func _random_free_cell(board: Board, rng: RandomNumberGenerator, avoid := Vector
 
 
 ## A plain atom (no bomb or wildcard) in a random orientation.
-func _random_stray(rng: RandomNumberGenerator) -> int:
-	var mask := Atoms.random_shape(rng)
-	for i in rng.randi_range(0, 3):
-		mask = Atoms.rotate_cw(mask)
+func _random_stray(rng: RandomNumberGenerator, topology: Topology) -> int:
+	var mask := Atoms.random_shape(rng, [], topology)
+	for i in rng.randi_range(0, topology.dir_count - 1):
+		mask = topology.rotate_cw(mask)
 	return mask

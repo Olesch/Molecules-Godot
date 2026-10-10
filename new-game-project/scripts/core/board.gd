@@ -5,6 +5,7 @@ extends RefCounted
 
 var width: int
 var height: int
+var topology: Topology
 ## Rules that powerup cards can bend: open connections a molecule may still have
 ## when it clears, and the minimum number of atoms for a molecule to clear.
 var max_open_ends := 0
@@ -22,7 +23,8 @@ var last_exploded: Array[Vector2i] = []
 var last_molecule_size := 0
 
 
-func _init(w: int, h: int) -> void:
+func _init(w: int, h: int, topo: Topology = null) -> void:
+	topology = topo if topo != null else Topology.square()
 	width = w
 	height = h
 	_cells.resize(w * h)
@@ -60,7 +62,8 @@ func is_full() -> bool:
 func _is_valid_atom(atom: int) -> bool:
 	if atom == Atoms.WILD:
 		return true
-	return (atom & Atoms.CONNECTION_BITS) != 0 and (atom & ~(Atoms.CONNECTION_BITS | Atoms.BOMB)) == 0
+	var dir_bits := (1 << topology.dir_count) - 1
+	return (atom & dir_bits) != 0 and (atom & ~(dir_bits | Atoms.BOMB)) == 0
 
 
 ## True if the connection of the atom at p pointing in direction dir is answered
@@ -68,19 +71,19 @@ func _is_valid_atom(atom: int) -> bool:
 func is_bonded(p: Vector2i, dir: int) -> bool:
 	if not (get_atom(p) & (1 << dir)):
 		return false
-	var n := p + Atoms.OFFSETS[dir]
+	var n := topology.neighbor(p, dir)
 	if not in_bounds(n):
 		return false
 	var other := get_atom(n)
-	return (other & (1 << Atoms.opposite(dir))) != 0 or Atoms.is_wild(other)
+	return (other & (1 << topology.opposite(dir))) != 0 or Atoms.is_wild(other)
 
 
 ## True if p and its neighbour in direction dir belong to the same molecule.
 func is_linked(p: Vector2i, dir: int) -> bool:
 	if is_bonded(p, dir):
 		return true
-	var n := p + Atoms.OFFSETS[dir]
-	return Atoms.is_wild(get_atom(p)) and in_bounds(n) and (get_atom(n) & (1 << Atoms.opposite(dir))) != 0
+	var n := topology.neighbor(p, dir)
+	return Atoms.is_wild(get_atom(p)) and in_bounds(n) and (get_atom(n) & (1 << topology.opposite(dir))) != 0
 
 
 ## Places an atom and returns every cell cleared by it: the closed molecule plus
@@ -111,13 +114,10 @@ func place(p: Vector2i, mask: int) -> Array[Vector2i]:
 		while not bombs.is_empty():
 			var bomb: Vector2i = bombs.pop_back()
 			last_exploded.append(bomb)
-			for dy in range(-Atoms.BLAST_RADIUS, Atoms.BLAST_RADIUS + 1):
-				for dx in range(-Atoms.BLAST_RADIUS, Atoms.BLAST_RADIUS + 1):
-					var n := bomb + Vector2i(dx, dy)
-					if in_bounds(n) and get_atom(n) != 0:
-						var reach := maxi(absi(dx), absi(dy))
-						depth_of[n] = int(depth_of[bomb]) + reach
-						bombs.append_array(_remove(n, removed, true, depth_of[n], bomb))
+			for n in topology.cells_within(bomb, Atoms.BLAST_RADIUS, width, height):
+				if get_atom(n) != 0:
+					depth_of[n] = int(depth_of[bomb]) + topology.distance(bomb, n)
+					bombs.append_array(_remove(n, removed, true, depth_of[n], bomb))
 		return removed
 	return cleared
 
@@ -131,9 +131,9 @@ func _link_tree(p: Vector2i) -> Dictionary:
 	while head < queue.size():
 		var cur := queue[head]
 		head += 1
-		for dir in 4:
+		for dir in topology.dir_count:
 			if is_linked(cur, dir):
-				var n: Vector2i = cur + Atoms.OFFSETS[dir]
+				var n: Vector2i = topology.neighbor(cur, dir)
 				if not tree.has(n):
 					tree[n] = {"depth": int(tree[cur].depth) + 1, "parent": cur}
 					queue.append(n)
@@ -165,9 +165,9 @@ func molecule_at(p: Vector2i) -> Array[Vector2i]:
 	while not stack.is_empty():
 		var cur: Vector2i = stack.pop_back()
 		group.append(cur)
-		for dir in 4:
+		for dir in topology.dir_count:
 			if is_linked(cur, dir):
-				var n: Vector2i = cur + Atoms.OFFSETS[dir]
+				var n: Vector2i = topology.neighbor(cur, dir)
 				if not seen.has(n):
 					seen[n] = true
 					stack.append(n)
@@ -191,7 +191,7 @@ func is_closed(group: Array[Vector2i]) -> bool:
 func open_end_count(group: Array[Vector2i]) -> int:
 	var open := 0
 	for c in group:
-		for dir in 4:
+		for dir in topology.dir_count:
 			if (get_atom(c) & (1 << dir)) and not is_bonded(c, dir):
 				open += 1
 	return open
@@ -226,9 +226,9 @@ func _scatter(count: int, rng: RandomNumberGenerator, allow_specials: bool) -> A
 		var p := Vector2i(rng.randi_range(0, width - 1), rng.randi_range(0, height - 1))
 		if get_atom(p) != 0:
 			continue
-		var atom := Atoms.random_atom(rng) if allow_specials else Atoms.random_shape(rng)
-		for i in rng.randi_range(0, 3):
-			atom = Atoms.rotate_cw(atom)
+		var atom := Atoms.random_atom(rng, Atoms.BOMB_CHANCE, Atoms.WILD_CHANCE, [], -1, topology) if allow_specials else Atoms.random_shape(rng, [], topology)
+		for i in rng.randi_range(0, topology.dir_count - 1):
+			atom = topology.rotate_cw(atom)
 		_cells[p.y * width + p.x] = atom
 		if is_closed(molecule_at(p)):
 			_cells[p.y * width + p.x] = 0

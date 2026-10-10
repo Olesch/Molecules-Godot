@@ -70,7 +70,12 @@ func _init() -> void:
 		pf._unhandled_input(click)
 		tries += 1
 	_check(pf._queue[0] != held_before and pf._reroll_cd == Playfield.REROLL_COOLDOWN, "clicking the Reroll button rerolls and starts the cooldown")
-	click.position = pf.get_parent_global_offset() + pf.home_position + Vector2(300.0, 300.0)
+	var empty_cell := Vector2i(-1, -1)
+	for y in 8:
+		for x in 8:
+			if empty_cell.x < 0 and pf.board.is_empty(Vector2i(x, y)):
+				empty_cell = Vector2i(x, y)
+	click.position = pf.get_parent_global_offset() + pf.home_position + pf._cell_center(empty_cell)
 	var cd_now := pf._reroll_cd
 	pf._unhandled_input(click)
 	_check(pf._reroll_cd == maxi(0, cd_now - 1), "a click elsewhere only places an atom (the cooldown just ticks down)")

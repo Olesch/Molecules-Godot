@@ -57,17 +57,19 @@ func bomb_chance() -> float:
 
 
 ## Atoms with at least this many connections can be bombs (4 at the start, Mini Bombs lowers it).
-func min_bomb_connections() -> int:
-	return maxi(1, Atoms.BOMB_MIN_CONNECTIONS - count(Cards.MINI_BOMBS))
+func min_bomb_connections(topology: Topology = null) -> int:
+	var topo := topology if topology != null else Topology.square()
+	return maxi(1, topo.max_connections - count(Cards.MINI_BOMBS))
 
 
 func wild_chance() -> float:
 	return maxf(0.0, Atoms.WILD_CHANCE + count(Cards.JOKER_SUPPLY) * 0.03 - count(Cards.HOT_POTATO) * 0.07)
 
 
-func shape_weights() -> Array[float]:
+func shape_weights(topology: Topology = null) -> Array[float]:
+	var topo := topology if topology != null else Topology.square()
 	var w: Array[float] = []
-	for x in Atoms.SHAPE_WEIGHTS:
+	for x in topo.shape_weights:
 		w.append(x)
 	if not w.is_empty():
 		w[w.size() - 1] *= pow(0.5, count(Cards.LUCKY_SHAPES))

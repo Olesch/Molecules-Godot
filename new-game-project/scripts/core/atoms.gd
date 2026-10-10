@@ -1,16 +1,16 @@
 class_name Atoms
 extends RefCounted
-## An atom is an int: the low 4 bits are connections (bit index runs clockwise:
-## 0=N, 1=E, 2=S, 3=W), higher bits are special flags such as BOMB.
+## An atom is an int: the low 6 bits are connections (bit index runs clockwise; square:
+## 0=N, 1=E, 2=S, 3=W; hex: see HexTopology), higher bits are special flags such as BOMB.
 
 const N := 1
 const E := 2
 const S := 4
 const W := 8
-const CONNECTION_BITS := 15
+const CONNECTION_BITS := 63
 
 ## Special flags.
-const BOMB := 16 ## When its molecule clears, also wipes the surrounding atoms.
+const BOMB := 64 ## When its molecule clears, also wipes the surrounding atoms.
 const BLAST_RADIUS := 1
 ## Chance that an eligible atom is a bomb. Only atoms with at least BOMB_MIN_CONNECTIONS
 ## connections are eligible; the Mini Bombs card lowers that threshold.
@@ -18,7 +18,7 @@ const BOMB_CHANCE := 0.35
 const BOMB_MIN_CONNECTIONS := 4
 ## A wildcard has no connections of its own: it links to every neighbour that points
 ## at it and never leaves an open end. It cannot clear on its own (a molecule needs 2+ atoms).
-const WILD := 32
+const WILD := 128
 const WILD_CHANCE := 0.0 ## no wildcards until the Joker Supply card is leveled
 
 ## Grid step for each bit index.
@@ -42,12 +42,9 @@ const SHAPES: Array[int] = [
 const SHAPE_WEIGHTS: Array[float] = [1.5, 1.5, 1.5, 1.0, 0.4]
 
 
+## Square-board conveniences (the view code uses these until it is topology-aware).
 static func rotate_cw(mask: int) -> int:
-	var result := mask & ~CONNECTION_BITS
-	for i in 4:
-		if mask & (1 << i):
-			result |= 1 << ((i + 1) % 4)
-	return result
+	return Topology.square().rotate_cw(mask)
 
 
 static func opposite(dir: int) -> int:
@@ -55,11 +52,7 @@ static func opposite(dir: int) -> int:
 
 
 static func connection_count(mask: int) -> int:
-	var count := 0
-	for i in 4:
-		if mask & (1 << i):
-			count += 1
-	return count
+	return Topology.square().connection_count(mask)
 
 
 static func is_bomb(atom: int) -> bool:
@@ -70,18 +63,23 @@ static func is_wild(atom: int) -> bool:
 	return (atom & WILD) != 0
 
 
-## Chances and shape weights can be overridden (powerup cards change them).
+## Chances and shape weights can be overridden (powerup cards change them); empty weights
+## mean the topology's own. min_bomb_connections < 0 means "only the most-connected shape".
 ## The rolls are always drawn, so the random sequence does not depend on the chances.
-static func random_atom(rng: RandomNumberGenerator, bomb_chance := BOMB_CHANCE, wild_chance := WILD_CHANCE, weights := SHAPE_WEIGHTS, min_bomb_connections := BOMB_MIN_CONNECTIONS) -> int:
+static func random_atom(rng: RandomNumberGenerator, bomb_chance := BOMB_CHANCE, wild_chance := WILD_CHANCE, weights: Array[float] = [], min_bomb_connections := -1, topology: Topology = null) -> int:
+	var topo := topology if topology != null else Topology.square()
 	var wild_roll := rng.randf()
-	var atom := random_shape(rng, weights)
+	var atom := random_shape(rng, weights, topo)
 	var bomb_roll := rng.randf()
 	if wild_roll < wild_chance:
 		return WILD
-	if connection_count(atom) >= min_bomb_connections and bomb_roll < bomb_chance:
+	var min_conn := min_bomb_connections if min_bomb_connections >= 0 else topo.max_connections
+	if topo.connection_count(atom) >= min_conn and bomb_roll < bomb_chance:
 		atom |= BOMB
 	return atom
 
 
-static func random_shape(rng: RandomNumberGenerator, weights := SHAPE_WEIGHTS) -> int:
-	return SHAPES[rng.rand_weighted(weights)]
+static func random_shape(rng: RandomNumberGenerator, weights: Array[float] = [], topology: Topology = null) -> int:
+	var topo := topology if topology != null else Topology.square()
+	var w: Array[float] = weights if not weights.is_empty() else topo.shape_weights
+	return topo.shapes[rng.rand_weighted(w)]
