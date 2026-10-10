@@ -1,7 +1,8 @@
 class_name MusicMixer
 extends Node
 ## Layered background music. The theme always plays. Drums fade in after the theme
-## has looped once, and the metal riff fades in slowly as the board fills up.
+## has looped once, and the metal riff fades in slowly as the board fills up while
+## the theme ducks down to THEME_MIN_GAIN.
 ## All layers have the same length and tempo and are kept in sync by an
 ## AudioStreamSynchronized, so they can be mixed freely.
 
@@ -11,10 +12,11 @@ const METAL := "res://assets/music/metal.wav"
 
 const BASE_DB := -7.0
 const SILENT_DB := -80.0
-const DRUM_FADE_SECONDS := 4.0
-const METAL_START_FILL := 0.60 ## board fill where the metal starts to creep in
-const METAL_FULL_FILL := 0.90 ## board fill where it is at full volume
-const METAL_FADE_SPEED := 0.15 ## volume units per second, so a full fade takes ~7 s
+const DRUM_FADE_SECONDS := 8.0
+const METAL_START_FILL := 0.50 ## board fill where the metal starts to creep in
+const METAL_FULL_FILL := 0.85 ## board fill where it is at full volume
+const METAL_FADE_SPEED := 0.15 ## fade progress per second, so a full fade takes ~7 s
+const THEME_MIN_GAIN := 0.5 ## linear gain of the theme once the metal is at full volume
 
 var _player: AudioStreamPlayer
 var _sync: AudioStreamSynchronized
@@ -88,9 +90,11 @@ func _process(delta: float) -> void:
 func _apply_volumes() -> void:
 	if _sync == null:
 		return
-	_sync.set_sync_stream_volume(0, 0.0)
-	_sync.set_sync_stream_volume(1, _to_db(_drums))
-	_sync.set_sync_stream_volume(2, _to_db(_metal))
+	# _drums and _metal are fade progress (0..1); smoothstep gives a gentle start and end.
+	var metal_gain := smoothstep(0.0, 1.0, _metal)
+	_sync.set_sync_stream_volume(0, _to_db(lerpf(1.0, THEME_MIN_GAIN, metal_gain)))
+	_sync.set_sync_stream_volume(1, _to_db(smoothstep(0.0, 1.0, _drums)))
+	_sync.set_sync_stream_volume(2, _to_db(metal_gain))
 
 
 static func _to_db(linear: float) -> float:
