@@ -55,6 +55,7 @@ var _overlay_sub := ""
 var _overlay_color := Palette.TEXT
 
 var _fx := PlayfieldFx.new() ## particles, popups, ghosts and shake
+var _danger := Danger.new() ## solo pressure: announced stray atoms that drop on a schedule
 var _offer_wait := 0.0 ## seconds to hold back a level-up card pick so the clear animation can play
 
 
@@ -77,6 +78,9 @@ func start(seed_value: int) -> void:
 	board = Board.new(BOARD_W, BOARD_H)
 	_apply_rules_to_board()
 	board.preplace(mods.preplaced_count(PREPLACED), _queue_rng)
+	_danger.ghosts.clear()
+	if _danger_active():
+		_danger.start(board, progression.level, _fx_rng)
 	_queue.clear()
 	_fit_queue()
 	score = 0
@@ -276,10 +280,53 @@ func try_place(p: Vector2i) -> void:
 			_lose()
 	else:
 		_celebrate(cleared)
+	if _danger_active() and not finished:
+		_danger_step(p)
 	_apply_lifeline()
 	board_changed.emit(board.snapshot()) # also after losing, so the opponent sees the final board
 	queue_redraw()
 	_maybe_offer()
+
+
+## Solo only: versus has the opponent for pressure.
+func _danger_active() -> bool:
+	return interactive and not versus
+
+
+## One placement passed: move a ghost you built over, then drop what is due.
+func _danger_step(placed: Vector2i) -> void:
+	var from := _cell_center(placed)
+	var moved := _danger.relocate_at(placed, board, _fx_rng)
+	if moved.x >= 0:
+		_fx.spark(from, _cell_center(moved), Palette.ORANGE, 0.3)
+		_fx.ring(from, Palette.ORANGE, 0.35)
+	var drops := _danger.tick(board, _fx_rng)
+	if drops.is_empty():
+		if _danger.countdown == 1 and not _danger.ghosts.is_empty():
+			sfx_requested.emit("warning", 1.0)
+		return
+	_drop_strays(drops)
+	if not finished:
+		_danger.schedule_next(board, progression.level, _fx_rng)
+
+
+## The announced stray atoms land. One that closes a molecule clears it like any placement.
+func _drop_strays(drops: Array[Dictionary]) -> void:
+	for d in drops:
+		var cell: Vector2i = d.cell
+		if not board.is_empty(cell):
+			continue
+		var cleared := board.place(cell, d.mask)
+		if cleared.is_empty():
+			_fx.pop(cell)
+			_fx.burst(_cell_center(cell), Palette.ORANGE, 8, 160.0)
+			_fx.ring(_cell_center(cell), Palette.ORANGE, 0.35)
+		else:
+			_celebrate(cleared)
+	sfx_requested.emit("garbage", 1.0)
+	_fx.shake(0.35)
+	if board.is_full():
+		_lose()
 
 
 ## Lifeline card: a nearly full board gets a wildcard as the next atom.
@@ -429,7 +476,7 @@ func _process(delta: float) -> void:
 		_maybe_offer()
 	_fx.advance(delta)
 	position = home_position + _fx.shake_offset()
-	if _fx.is_busy() or position != home_position:
+	if _fx.is_busy() or position != home_position or (_danger_active() and not _danger.ghosts.is_empty()):
 		queue_redraw()
 
 
@@ -456,6 +503,9 @@ func _draw() -> void:
 			draw_rect(area, Color(Palette.ORANGE, 0.5), false, 2.0)
 		_draw_atom(_cell_center(_hover), _queue[0], 0.45, Vector2i(-1, -1))
 
+	if _danger_active() and not finished:
+		_draw_danger_ghosts(font)
+
 	_fx.paint(self, board)
 
 	# Incoming stray atoms waiting to land: red blocks along the left edge.
@@ -476,6 +526,18 @@ func _draw() -> void:
 			draw_string(font, Vector2(0, mid + 28), _overlay_sub, HORIZONTAL_ALIGNMENT_CENTER, board_px.x, 20 if interactive else 12, Palette.TEXT)
 
 
+## The stray atoms that will drop soon: transparent, pulsing, with the placements left.
+func _draw_danger_ghosts(font: Font) -> void:
+	var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 220.0)
+	var tint := Palette.BAD if _danger.countdown <= 1 else Palette.ORANGE
+	var line_scale := cell_size / 72.0
+	for g in _danger.ghosts:
+		var center := _cell_center(g.cell)
+		_draw_atom(center, g.mask, 0.34 + 0.16 * pulse, Vector2i(-1, -1))
+		draw_arc(center, cell_size * 0.36, 0.0, TAU, 28, Color(tint, 0.35 + 0.4 * pulse), 2.5 * line_scale)
+		draw_string(font, center + Vector2(cell_size * 0.16, cell_size * 0.44), str(_danger.countdown), HORIZONTAL_ALIGNMENT_LEFT, -1, int(15 * line_scale), tint)
+
+
 func _draw_header(font: Font, board_px: Vector2) -> void:
 	draw_string(font, Vector2(0, -HEADER + 28), "NOW", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Palette.DIM)
 	_draw_atom(Vector2(40, -HEADER + 78), _queue[0], 1.0, Vector2i(-1, -1), 1.0, 72)
@@ -490,6 +552,10 @@ func _draw_header(font: Font, board_px: Vector2) -> void:
 	draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(progression.xp / float(need), 0.0, 1.0), bar.size.y)), Palette.GOLD)
 	if _pending > 0:
 		draw_string(font, Vector2(0, -HEADER + 120), "INCOMING: %d" % _pending, HORIZONTAL_ALIGNMENT_RIGHT, board_px.x, 18, Palette.BAD)
+	elif _danger_active() and not _danger.ghosts.is_empty():
+		var count := _danger.ghosts.size()
+		var text := "STRAY IN %d" % _danger.countdown if count == 1 else "%d STRAYS IN %d" % [count, _danger.countdown]
+		draw_string(font, Vector2(0, -HEADER + 120), text, HORIZONTAL_ALIGNMENT_RIGHT, board_px.x, 18, Palette.BAD if _danger.countdown <= 1 else Palette.ORANGE)
 	_draw_card_rows(font, board_px)
 
 
