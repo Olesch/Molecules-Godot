@@ -3,11 +3,8 @@ extends Control
 
 signal choose(mode: String, address: String)
 
-const PORT := 24680
-const TEXT_COL := Color("e8ecf1")
-const GREEN := Color("6ab04c")
-const BLUE := Color("4a90d9")
-const ORANGE := Color("ff9a3c")
+## Shown in the menu and along the bottom of the game screen.
+const CONTROLS_HINT := "Click: place   R / right-click / wheel: rotate   M: music   Esc: menu   Cards: H stash, X reroll, Tab swap"
 
 var _solo_btn: Button
 var _host_btn: Button
@@ -21,7 +18,7 @@ var _status: Label
 func _init() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()
-	bg.color = Color("1e2229")
+	bg.color = Palette.BG
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
@@ -39,20 +36,20 @@ func _init() -> void:
 	title.text = "MOLECULES"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 56)
-	title.add_theme_color_override("font_color", TEXT_COL)
+	title.add_theme_color_override("font_color", Palette.TEXT)
 	box.add_child(title)
 
 	var sub := Label.new()
 	sub.text = "close the loops"
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.add_theme_font_size_override("font_size", 18)
-	sub.add_theme_color_override("font_color", ORANGE)
+	sub.add_theme_color_override("font_color", Palette.ORANGE)
 	box.add_child(sub)
 
 	_spacer(box, 18)
-	_solo_btn = _make_button("Solo", GREEN)
+	_solo_btn = _make_button("Solo", Palette.GOOD)
 	box.add_child(_solo_btn)
-	_host_btn = _make_button("Host online game", BLUE)
+	_host_btn = _make_button("Host online game", Palette.BLUE)
 	box.add_child(_host_btn)
 	_spacer(box, 6)
 
@@ -61,23 +58,23 @@ func _init() -> void:
 	_address.text = "127.0.0.1"
 	_address.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_address.custom_minimum_size = Vector2(0, 40)
-	_address.add_theme_color_override("font_color", TEXT_COL)
-	_address.add_theme_color_override("font_placeholder_color", Color(TEXT_COL, 0.4))
-	_address.add_theme_color_override("caret_color", TEXT_COL)
-	_address.add_theme_stylebox_override("normal", _box(Color("2a303a")))
-	_address.add_theme_stylebox_override("focus", _box(Color("2a303a"), BLUE))
-	_address.add_theme_stylebox_override("read_only", _box(Color("2a303a")))
+	_address.add_theme_color_override("font_color", Palette.TEXT)
+	_address.add_theme_color_override("font_placeholder_color", Color(Palette.TEXT, 0.4))
+	_address.add_theme_color_override("caret_color", Palette.TEXT)
+	_address.add_theme_stylebox_override("normal", _box(Palette.FIELD))
+	_address.add_theme_stylebox_override("focus", _box(Palette.FIELD, Palette.BLUE))
+	_address.add_theme_stylebox_override("read_only", _box(Palette.FIELD))
 	_address.text_submitted.connect(func(_t: String) -> void: _on_join())
 	box.add_child(_address)
 
-	_join_btn = _make_button("Join game", ORANGE)
+	_join_btn = _make_button("Join game", Palette.ORANGE)
 	box.add_child(_join_btn)
 
-	_cancel_btn = _make_button("Cancel", Color("c0504d"))
+	_cancel_btn = _make_button("Cancel", Palette.RED)
 	_cancel_btn.visible = false
 	box.add_child(_cancel_btn)
 
-	_reset_btn = _make_button("Reset solo progress", Color("8f98a8"))
+	_reset_btn = _make_button("Reset solo progress", Palette.DIM)
 	_reset_btn.add_theme_font_size_override("font_size", 13)
 	_reset_btn.pressed.connect(func() -> void: choose.emit("reset_progress", ""))
 	box.add_child(_reset_btn)
@@ -88,16 +85,16 @@ func _init() -> void:
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status.custom_minimum_size = Vector2(360, 0)
 	_status.add_theme_font_size_override("font_size", 14)
-	_status.add_theme_color_override("font_color", TEXT_COL)
+	_status.add_theme_color_override("font_color", Palette.TEXT)
 	box.add_child(_status)
 
 	var hint := Label.new()
-	hint.text = "Controls: click place - R / right-click / wheel rotate - M music"
+	hint.text = "Controls: " + CONTROLS_HINT
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.custom_minimum_size = Vector2(360, 0)
 	hint.add_theme_font_size_override("font_size", 12)
-	hint.add_theme_color_override("font_color", Color(TEXT_COL, 0.55))
+	hint.add_theme_color_override("font_color", Color(Palette.TEXT, 0.55))
 	box.add_child(hint)
 
 	_solo_btn.pressed.connect(func() -> void: choose.emit("solo", ""))
@@ -135,7 +132,7 @@ func get_default_status_for(mode: String) -> String:
 						ips.append(a)
 			var shown := ips.slice(0, 3)
 			var list := ", ".join(shown) if not shown.is_empty() else "unknown"
-			return "Waiting for opponent... your addresses: %s (port %d)" % [list, PORT]
+			return "Waiting for opponent... your addresses: %s (port %d)" % [list, NetSession.DEFAULT_PORT]
 		"join":
 			return "Connecting to %s..." % _address.text.strip_edges()
 	return ""
@@ -167,12 +164,12 @@ func _make_button(text: String, accent: Color) -> Button:
 	b.custom_minimum_size = Vector2(0, 46)
 	b.focus_mode = Control.FOCUS_NONE
 	b.add_theme_font_size_override("font_size", 20)
-	b.add_theme_color_override("font_color", Color("1e2229"))
-	b.add_theme_color_override("font_hover_color", Color("1e2229"))
-	b.add_theme_color_override("font_pressed_color", Color("1e2229"))
-	b.add_theme_color_override("font_disabled_color", Color(TEXT_COL, 0.35))
+	b.add_theme_color_override("font_color", Palette.BG)
+	b.add_theme_color_override("font_hover_color", Palette.BG)
+	b.add_theme_color_override("font_pressed_color", Palette.BG)
+	b.add_theme_color_override("font_disabled_color", Color(Palette.TEXT, 0.35))
 	b.add_theme_stylebox_override("normal", _box(accent))
 	b.add_theme_stylebox_override("hover", _box(accent.lightened(0.18)))
 	b.add_theme_stylebox_override("pressed", _box(accent.darkened(0.15)))
-	b.add_theme_stylebox_override("disabled", _box(Color("2f353f")))
+	b.add_theme_stylebox_override("disabled", _box(Palette.DISABLED))
 	return b

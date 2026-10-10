@@ -6,10 +6,6 @@ const SFX_NAMES: Array[String] = [
 	"place", "rotate", "clear", "lose", "invalid", "explode",
 	"attack", "garbage", "win", "warning",
 ]
-const BG_COLOR := Color("1e2229")
-const DIM_TEXT := Color("8f98a8")
-const GOOD := Color("6ab04c")
-const BAD := Color("ff5d5d")
 const LOCAL_CELL := 72
 const REMOTE_CELL := 40
 const MARGIN := 40.0
@@ -75,9 +71,9 @@ func _play(sfx_name: String, pitch := 1.0) -> void:
 
 func _draw() -> void:
 	var size := get_viewport_rect().size
-	draw_rect(Rect2(Vector2(-60, -60), size + Vector2(120, 120)), BG_COLOR)
+	draw_rect(Rect2(Vector2(-60, -60), size + Vector2(120, 120)), Palette.BG)
 	if _mode == Mode.SOLO or _mode == Mode.VERSUS:
-		draw_string(ThemeDB.fallback_font, Vector2(MARGIN, size.y - 20), "Click: place   R / right-click / wheel: rotate   M: music   Esc: menu   Cards: H stash, X reroll, Tab swap", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, DIM_TEXT)
+		draw_string(ThemeDB.fallback_font, Vector2(MARGIN, size.y - 20), Menu.CONTROLS_HINT, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Palette.DIM)
 
 
 func _layout() -> void:
@@ -149,7 +145,7 @@ func _enter_versus() -> void:
 	_remote.title = "OPPONENT"
 	add_child(_remote)
 	_layout()
-	_local.set_overlay("Connected!", "Starting...", GOOD)
+	_local.set_overlay("Connected!", "Starting...", Palette.GOOD)
 	_waiting_for_rematch = true
 	_net.send_ready()
 
@@ -240,11 +236,11 @@ func _on_peer_lost() -> void:
 		return
 	if _local.finished:
 		# Both boards filled at about the same time.
-		_local.set_overlay("DRAW", "Press Enter for a rematch", DIM_TEXT)
-		_remote.set_overlay("DRAW", "", DIM_TEXT)
+		_local.set_overlay("DRAW", "Press Enter for a rematch", Palette.DIM)
+		_remote.set_overlay("DRAW", "", Palette.DIM)
 		return
-	_local.set_overlay("YOU WIN!", "Press Enter for a rematch", GOOD)
-	_remote.set_overlay("DEFEATED", "", BAD)
+	_local.set_overlay("YOU WIN!", "Press Enter for a rematch", Palette.GOOD)
+	_remote.set_overlay("DEFEATED", "", Palette.BAD)
 	_play("win")
 
 
@@ -258,9 +254,9 @@ func _on_progression_changed() -> void:
 func _on_local_lost() -> void:
 	if _mode == Mode.VERSUS:
 		_net.send_lost()
-		_local.set_overlay("BOARD FULL - YOU LOSE", "Press Enter for a rematch", BAD)
+		_local.set_overlay("BOARD FULL - YOU LOSE", "Press Enter for a rematch", Palette.BAD)
 	else:
-		_local.set_overlay("BOARD FULL - YOU LOSE", "Click or press Enter to restart", BAD)
+		_local.set_overlay("BOARD FULL - YOU LOSE", "Click or press Enter to restart", Palette.BAD)
 
 
 func _on_restart_requested() -> void:
@@ -268,7 +264,7 @@ func _on_restart_requested() -> void:
 		if _waiting_for_rematch:
 			return
 		_waiting_for_rematch = true
-		_local.set_overlay("Waiting for opponent...", "", DIM_TEXT)
+		_local.set_overlay("Waiting for opponent...", "", Palette.DIM)
 		_net.send_ready()
 	elif _mode == Mode.SOLO:
 		_local.start(randi())

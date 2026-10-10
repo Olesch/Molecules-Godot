@@ -5,7 +5,7 @@ class_name NetSession extends Node
 ## child "NetSession" under an identically named node such as /root/Game).
 
 const DEFAULT_PORT := 24680
-const CELL_COUNT := 64
+const CELL_COUNT := Playfield.BOARD_W * Playfield.BOARD_H
 const MAX_ATTACK := 64
 
 signal connected()

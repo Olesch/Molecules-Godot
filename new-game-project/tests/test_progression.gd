@@ -1,17 +1,5 @@
-extends SceneTree
+extends "res://tests/test_base.gd"
 ## Run: godot --headless --path new-game-project --script res://tests/test_progression.gd
-
-var _failed := 0
-var _count := 0
-
-
-func _check(cond: bool, name: String) -> void:
-	_count += 1
-	if cond:
-		print("ok   ", name)
-	else:
-		print("FAIL ", name)
-		_failed += 1
 
 
 func _mods(d: Dictionary) -> Modifiers:
@@ -193,5 +181,4 @@ func _init() -> void:
 	_check(Progression.load_from("user://does_not_exist.json").level == 1, "missing file -> fresh")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
-	print("tests: ", _count, " failures: ", _failed)
-	quit(1 if _failed > 0 else 0)
+	_finish(true)

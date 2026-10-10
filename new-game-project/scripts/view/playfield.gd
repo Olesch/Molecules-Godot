@@ -18,24 +18,8 @@ const PREPLACED := 10
 const REROLL_COOLDOWN := 4 ## placements before Reroll recharges
 const LIFELINE_FILL := 0.78
 const LIFELINE_COOLDOWN := 4
-const SHAKE_MAX := 22.0
-const POP_TIME := 0.18
 const CLEAR_STEP := 0.07 ## seconds between neighbouring atoms of a clearing molecule
 const CLEAR_MAX_TIME := 0.7 ## the whole wave never takes longer than this
-
-const COLORS: Array[Color] = [
-	Color("6ab04c"), # 1 connection
-	Color("4a90d9"), # 2
-	Color("e0a030"), # 3
-	Color("c0504d"), # 4
-]
-const BOMB_COLOR := Color("2b2f38")
-const BLAST_COLOR := Color("ff9a3c")
-const WILD_COLOR := Color("b07cff")
-const GRID_COLOR := Color("353b46")
-const STUB_OK := Color("e8ecf1")
-const STUB_OPEN := Color("ff5d5d")
-const DIM_TEXT := Color("8f98a8")
 
 var cell_size := 72
 var interactive := true
@@ -68,19 +52,16 @@ var _since_clear := 99 ## placements since the last clear (for Combo Chain)
 var _stray := {} ## cells that received stray atoms (for Gardener)
 var _overlay_title := ""
 var _overlay_sub := ""
-var _overlay_color := STUB_OK
+var _overlay_color := Palette.TEXT
 
-# Juice: particles and rings share one list; popups are floating score text.
-var _fx: Array[Dictionary] = []
-var _popups: Array[Dictionary] = []
-var _pop_age := {} # Vector2i -> seconds since the atom was placed
-var _trauma := 0.0
-var _ghosts: Array[Dictionary] = [] # cleared atoms still shown until the clear wave reaches them
+var _fx := PlayfieldFx.new() ## particles, popups, ghosts and shake
 var _offer_wait := 0.0 ## seconds to hold back a level-up card pick so the clear animation can play
 
 
 func _ready() -> void:
 	_fx_rng.randomize()
+	_fx.cell_size = cell_size
+	_fx.ghost_fired.connect(_on_ghost_fired)
 	if interactive:
 		_card_overlay = CardOverlay.new()
 		_card_overlay.board_size = Vector2(BOARD_W, BOARD_H) * cell_size
@@ -112,9 +93,6 @@ func start(seed_value: int) -> void:
 	_overlay_title = ""
 	_overlay_sub = ""
 	_fx.clear()
-	_popups.clear()
-	_pop_age.clear()
-	_ghosts.clear()
 	_offer_wait = 0.0
 	queue_redraw()
 	if interactive:
@@ -141,7 +119,7 @@ func _fit_queue() -> void:
 
 
 ## Overlay text for a finished game ("" clears it). Also stops local input.
-func set_overlay(overlay_title: String, sub := "", color := STUB_OK) -> void:
+func set_overlay(overlay_title: String, sub := "", color := Palette.TEXT) -> void:
 	_overlay_title = overlay_title
 	_overlay_sub = sub
 	_overlay_color = color
@@ -168,9 +146,9 @@ func apply_snapshot(cells: PackedInt32Array) -> void:
 			var old := board.get_atom(p)
 			var now := cells[y * BOARD_W + x]
 			if old != 0 and now == 0:
-				_burst(_cell_center(p), _atom_color(old), 8, 160.0)
+				_fx.burst(_cell_center(p), AtomPainter.color(old), 8, 160.0)
 			elif old == 0 and now != 0:
-				_pop_age[p] = 0.0
+				_fx.pop(p)
 	board.load_snapshot(cells)
 	queue_redraw()
 
@@ -186,7 +164,7 @@ func get_parent_global_offset() -> Vector2:
 
 
 func _cell_center(p: Vector2i) -> Vector2:
-	return (Vector2(p) + Vector2(0.5, 0.5)) * cell_size
+	return _fx.cell_center(p)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -239,7 +217,7 @@ func rotate_held(clockwise := true) -> void:
 
 ## Stash card: store the held atom, or swap it with the stored one.
 func stash_swap() -> void:
-	if finished or _offer_open() or not mods.has("stash"):
+	if finished or _offer_open() or not mods.has(Cards.STASH):
 		return
 	if _stash == 0:
 		_stash = _queue[0]
@@ -255,7 +233,7 @@ func stash_swap() -> void:
 
 ## Reroll card: throw away the held atom for a new random one (recharges over placements).
 func reroll_held() -> void:
-	if finished or _offer_open() or not mods.has("reroll") or _reroll_cd > 0:
+	if finished or _offer_open() or not mods.has(Cards.REROLL) or _reroll_cd > 0:
 		return
 	_queue[0] = _new_atom()
 	_reroll_cd = REROLL_COOLDOWN
@@ -265,7 +243,7 @@ func reroll_held() -> void:
 
 ## Two-Hand card: swap the held atom with the next one.
 func swap_next() -> void:
-	if finished or _offer_open() or not mods.has("two_hand") or _queue.size() < 2:
+	if finished or _offer_open() or not mods.has(Cards.TWO_HAND) or _queue.size() < 2:
 		return
 	var held := _queue[0]
 	_queue[0] = _queue[1]
@@ -279,7 +257,7 @@ func try_place(p: Vector2i) -> void:
 		return
 	if not board.is_empty(p):
 		sfx_requested.emit("invalid", 1.0)
-		_trauma = minf(1.0, _trauma + 0.12)
+		_fx.shake(0.12)
 		return
 	var cleared := board.place(p, _queue[0])
 	_queue.pop_front()
@@ -289,10 +267,10 @@ func try_place(p: Vector2i) -> void:
 	_reroll_cd = maxi(0, _reroll_cd - 1)
 	_lifeline_cd = maxi(0, _lifeline_cd - 1)
 	if cleared.is_empty():
-		_pop_age[p] = 0.0
+		_fx.pop(p)
 		sfx_requested.emit("place", 1.0)
-		_trauma = minf(1.0, _trauma + 0.08)
-		_burst(_cell_center(p), STUB_OK.darkened(0.4), 6, 90.0)
+		_fx.shake(0.08)
+		_fx.burst(_cell_center(p), Palette.TEXT.darkened(0.4), 6, 90.0)
 		_land_stray_atoms()
 		if board.is_full():
 			_lose()
@@ -306,7 +284,7 @@ func try_place(p: Vector2i) -> void:
 
 ## Lifeline card: a nearly full board gets a wildcard as the next atom.
 func _apply_lifeline() -> void:
-	if finished or not mods.has("lifeline") or _lifeline_cd > 0:
+	if finished or not mods.has(Cards.LIFELINE) or _lifeline_cd > 0:
 		return
 	if board.fill_ratio() >= LIFELINE_FILL and not Atoms.is_wild(_queue[0]):
 		_queue[0] = Atoms.WILD
@@ -317,18 +295,18 @@ func _apply_lifeline() -> void:
 func _land_stray_atoms() -> void:
 	if _pending <= 0:
 		return
-	if mods.has("shield") and _placements % 4 == 0:
+	if mods.has(Cards.SHIELD) and _placements % 4 == 0:
 		return # Shield: every 4th placement the strays are held back
 	var landing := mini(_pending, mods.garbage_cap())
 	_pending -= landing
 	var cells := board.add_garbage(landing, _fx_rng)
 	for c in cells:
 		_stray[c] = true
-		_pop_age[c] = 0.0
-		_burst(_cell_center(c), WILD_COLOR.darkened(0.2), 6, 140.0)
+		_fx.pop(c)
+		_fx.burst(_cell_center(c), Palette.PURPLE.darkened(0.2), 6, 140.0)
 	sfx_requested.emit("garbage", 1.0)
-	_trauma = minf(1.0, _trauma + 0.45)
-	if mods.has("counterstrike"):
+	_fx.shake(0.45)
+	if mods.has(Cards.COUNTERSTRIKE):
 		attack.emit(1)
 
 
@@ -348,19 +326,13 @@ func _celebrate(cleared: Array[Vector2i]) -> void:
 	var step := minf(CLEAR_STEP, CLEAR_MAX_TIME / maxf(1.0, max_depth))
 	for i in cleared.size():
 		sum += _cell_center(cleared[i])
-		_ghosts.append({
-			"cell": cleared[i],
-			"mask": board.last_cleared_masks[i],
-			"delay": depths[i] * step,
-			"age": 0.0,
-			"parent": board.last_clear_parents[i],
-		})
+		_fx.add_ghost(cleared[i], board.last_cleared_masks[i], depths[i] * step, board.last_clear_parents[i])
 	var popup_text := "+%d" % points
-	if combo and mods.has("combo_chain"):
+	if combo and mods.has(Cards.COMBO_CHAIN):
 		popup_text += " COMBO!"
-	_popups.append({"pos": sum / cleared.size(), "age": -max_depth * step, "text": popup_text})
+	_fx.popup(sum / cleared.size(), popup_text, -max_depth * step)
 	sfx_requested.emit("clear", clampf(0.9 + 0.06 * (cleared.size() - 2), 0.8, 1.5))
-	_trauma = minf(1.0, _trauma + 0.25 + 0.06 * cleared.size())
+	_fx.shake(0.25 + 0.06 * cleared.size())
 
 	# Incoming stray atoms are cancelled first; whatever is left goes to the opponent.
 	var outgoing := mods.scaled_attack(molecule, blasted)
@@ -373,9 +345,9 @@ func _celebrate(cleared: Array[Vector2i]) -> void:
 		attack.emit(outgoing)
 
 	_since_clear = 0
-	if mods.has("gardener"):
+	if mods.has(Cards.GARDENER):
 		_remove_random_stray()
-	if mods.has("overcharge") and molecule >= 4:
+	if mods.has(Cards.OVERCHARGE) and molecule >= 4:
 		_queue.insert(0, Atoms.random_shape(_queue_rng, mods.shape_weights()) | Atoms.BOMB)
 		_fit_queue()
 		sfx_requested.emit("clear", 1.3)
@@ -399,8 +371,8 @@ func _remove_random_stray() -> void:
 	var victim := live[_fx_rng.randi_range(0, live.size() - 1)]
 	board.remove_atom(victim)
 	_stray.erase(victim)
-	_burst(_cell_center(victim), WILD_COLOR, 12, 220.0)
-	_fx.append({"kind": 1, "pos": _cell_center(victim), "age": 0.0, "life": 0.4, "color": WILD_COLOR, "size": 0.0, "vel": Vector2.ZERO})
+	_fx.burst(_cell_center(victim), Palette.PURPLE, 12, 220.0)
+	_fx.ring(_cell_center(victim), Palette.PURPLE, 0.4)
 
 
 func _offer_open() -> bool:
@@ -411,7 +383,7 @@ func _offer_open() -> bool:
 func _maybe_offer() -> void:
 	if _card_overlay == null or _card_overlay.is_open() or finished or not progression.has_pending_pick():
 		return
-	if _offer_wait > 0.0 or not _ghosts.is_empty():
+	if _offer_wait > 0.0 or _fx.has_ghosts():
 		return # _process tries again once the clear animation is done
 	var cards: Array[Dictionary] = []
 	for id in progression.roll_offer(_fx_rng, versus):
@@ -428,95 +400,36 @@ func _on_card_picked(card_id: String) -> void:
 		_apply_rules_to_board()
 		_fit_queue()
 		var def := Cards.get_def(card_id)
-		_popups.append({"pos": Vector2(cell_size * BOARD_W / 2.0, cell_size * 2.0), "age": 0.0, "text": String(def.get("name", card_id))})
+		_fx.popup(Vector2(cell_size * BOARD_W / 2.0, cell_size * 2.0), String(def.get("name", card_id)))
 		sfx_requested.emit("win", 1.0)
 		progression_changed.emit()
 		queue_redraw()
 	_maybe_offer()
 
 
-## The clear wave reaches an atom: it bursts, and a spark runs along the bond it came through.
-func _fire_ghost(ghost: Dictionary) -> void:
-	var cell: Vector2i = ghost.cell
-	var mask: int = ghost.mask
-	var center := _cell_center(cell)
-	var body := _atom_color(mask)
-	_burst(center, body, 14, 300.0)
-	_fx.append({"kind": 1, "pos": center, "age": 0.0, "life": 0.4, "color": body, "size": 0.0, "vel": Vector2.ZERO})
-	var parent: Vector2i = ghost.parent
-	if parent.x >= 0:
-		_fx.append({"kind": 2, "pos": _cell_center(parent), "to": center, "age": 0.0, "life": 0.22, "color": Color.WHITE, "size": 0.0, "vel": Vector2.ZERO})
-	if Atoms.is_bomb(mask):
-		_burst(center, BLAST_COLOR, 36, 520.0)
-		_fx.append({"kind": 1, "pos": center, "age": 0.0, "life": 0.55, "color": BLAST_COLOR, "size": 0.0, "vel": Vector2.ZERO, "grow": 2.4})
+## The clear wave reached a ghost; bombs also go off with a bang.
+func _on_ghost_fired(ghost: Dictionary) -> void:
+	if Atoms.is_bomb(ghost.mask):
 		sfx_requested.emit("explode", 1.0)
-		_trauma = 1.0
 
 
 func _lose() -> void:
-	set_overlay("BOARD FULL - YOU LOSE", "", STUB_OPEN)
+	set_overlay("BOARD FULL - YOU LOSE", "", Palette.BAD)
 	sfx_requested.emit("lose", 1.0)
-	_trauma = 1.0
+	_fx.shake_max()
 	for i in 40:
 		var cell := Vector2i(_fx_rng.randi_range(0, BOARD_W - 1), _fx_rng.randi_range(0, BOARD_H - 1))
-		_burst(_cell_center(cell), STUB_OPEN, 2, 260.0)
+		_fx.burst(_cell_center(cell), Palette.BAD, 2, 260.0)
 	lost.emit()
 
 
-## Spawns count dots flying outward from pos.
-func _burst(pos: Vector2, color: Color, count: int, speed: float) -> void:
-	var scale := cell_size / 72.0
-	for i in count:
-		var dir := Vector2.from_angle(_fx_rng.randf() * TAU)
-		_fx.append({
-			"kind": 0,
-			"pos": pos,
-			"vel": dir * speed * scale * _fx_rng.randf_range(0.35, 1.0),
-			"age": 0.0,
-			"life": _fx_rng.randf_range(0.35, 0.8),
-			"size": _fx_rng.randf_range(3.0, 6.5) * scale,
-			"color": color.lightened(_fx_rng.randf_range(0.0, 0.35)),
-		})
-
-
 func _process(delta: float) -> void:
-	_trauma = maxf(0.0, _trauma - delta * 1.6)
-	if _trauma > 0.0:
-		position = home_position + Vector2(_fx_rng.randf_range(-1.0, 1.0), _fx_rng.randf_range(-1.0, 1.0)) * SHAKE_MAX * (cell_size / 72.0) * _trauma * _trauma
-	else:
-		position = home_position
-
-	for i in range(_fx.size() - 1, -1, -1):
-		var f := _fx[i]
-		f.age += delta
-		if f.age >= f.life:
-			_fx.remove_at(i)
-			continue
-		if f.kind != 0:
-			continue # rings and sparks do not fall
-		var vel: Vector2 = f.vel
-		vel = vel * maxf(0.0, 1.0 - 3.0 * delta) + Vector2(0.0, 380.0 * cell_size / 72.0) * delta
-		f.vel = vel
-		f.pos += vel * delta
 	_offer_wait = maxf(0.0, _offer_wait - delta)
-	if _offer_wait == 0.0 and _ghosts.is_empty() and progression.has_pending_pick():
+	if _offer_wait == 0.0 and not _fx.has_ghosts() and progression.has_pending_pick():
 		_maybe_offer()
-	for i in range(_ghosts.size() - 1, -1, -1):
-		var ghost := _ghosts[i]
-		ghost.age += delta
-		if ghost.age >= ghost.delay:
-			_fire_ghost(ghost)
-			_ghosts.remove_at(i)
-	for i in range(_popups.size() - 1, -1, -1):
-		_popups[i].age += delta
-		if _popups[i].age >= 0.9:
-			_popups.remove_at(i)
-	for cell in _pop_age.keys():
-		_pop_age[cell] += delta
-		if _pop_age[cell] >= POP_TIME:
-			_pop_age.erase(cell)
-
-	if not (_fx.is_empty() and _popups.is_empty() and _pop_age.is_empty() and _ghosts.is_empty()) or _trauma > 0.0 or position != home_position:
+	_fx.advance(delta)
+	position = home_position + _fx.shake_offset()
+	if _fx.is_busy() or position != home_position:
 		queue_redraw()
 
 
@@ -529,31 +442,30 @@ func _draw() -> void:
 	for y in BOARD_H:
 		for x in BOARD_W:
 			var p := Vector2i(x, y)
-			draw_rect(Rect2(Vector2(p) * cell_size, Vector2(cell_size, cell_size)), GRID_COLOR, false, 1.0)
+			draw_rect(Rect2(Vector2(p) * cell_size, Vector2(cell_size, cell_size)), Palette.GRID, false, 1.0)
 			var mask := board.get_atom(p)
 			if mask != 0:
-				_draw_atom(_cell_center(p), mask, 1.0, p, _pop_scale(p))
+				_draw_atom(_cell_center(p), mask, 1.0, p, _fx.pop_scale(p))
 
 	# Hover preview (a bomb also shows its blast area).
 	if interactive and not finished and board.is_empty(_hover):
 		if Atoms.is_bomb(_queue[0]):
 			var r := Atoms.BLAST_RADIUS
 			var area := Rect2(Vector2(_hover - Vector2i(r, r)) * cell_size, Vector2.ONE * cell_size * (2 * r + 1))
-			draw_rect(area, Color(BLAST_COLOR, 0.12))
-			draw_rect(area, Color(BLAST_COLOR, 0.5), false, 2.0)
+			draw_rect(area, Color(Palette.ORANGE, 0.12))
+			draw_rect(area, Color(Palette.ORANGE, 0.5), false, 2.0)
 		_draw_atom(_cell_center(_hover), _queue[0], 0.45, Vector2i(-1, -1))
 
-	_draw_ghosts()
-	_draw_fx(font)
+	_fx.paint(self, board)
 
 	# Incoming stray atoms waiting to land: red blocks along the left edge.
 	for i in mini(_pending, 16):
-		draw_rect(Rect2(-14, board_px.y - 14 - i * 14, 8, 11), STUB_OPEN)
+		draw_rect(Rect2(-14, board_px.y - 14 - i * 14, 8, 11), Palette.BAD)
 
 	if interactive:
 		_draw_header(font, board_px)
 	elif title != "":
-		draw_string(font, Vector2(0, -10), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, DIM_TEXT)
+		draw_string(font, Vector2(0, -10), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Palette.DIM)
 
 	if _overlay_title != "":
 		draw_rect(Rect2(Vector2.ZERO, board_px), Color(0, 0, 0, 0.6))
@@ -561,23 +473,23 @@ func _draw() -> void:
 		var big := 32 if interactive else 16
 		draw_string(font, Vector2(0, mid - 10), _overlay_title, HORIZONTAL_ALIGNMENT_CENTER, board_px.x, big, _overlay_color)
 		if _overlay_sub != "":
-			draw_string(font, Vector2(0, mid + 28), _overlay_sub, HORIZONTAL_ALIGNMENT_CENTER, board_px.x, 20 if interactive else 12, STUB_OK)
+			draw_string(font, Vector2(0, mid + 28), _overlay_sub, HORIZONTAL_ALIGNMENT_CENTER, board_px.x, 20 if interactive else 12, Palette.TEXT)
 
 
 func _draw_header(font: Font, board_px: Vector2) -> void:
-	draw_string(font, Vector2(0, -HEADER + 28), "NOW", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, DIM_TEXT)
+	draw_string(font, Vector2(0, -HEADER + 28), "NOW", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Palette.DIM)
 	_draw_atom(Vector2(40, -HEADER + 78), _queue[0], 1.0, Vector2i(-1, -1), 1.0, 72)
-	draw_string(font, Vector2(120, -HEADER + 28), "COMING UP", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, DIM_TEXT)
+	draw_string(font, Vector2(120, -HEADER + 28), "COMING UP", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Palette.DIM)
 	for i in range(1, _queue.size()):
 		_draw_atom(Vector2(150 + (i - 1) * 62, -HEADER + 78), _queue[i], 0.85, Vector2i(-1, -1), 0.6, 72)
-	draw_string(font, Vector2(0, -HEADER + 40), "SCORE: %d" % score, HORIZONTAL_ALIGNMENT_RIGHT, board_px.x, 22, STUB_OK)
+	draw_string(font, Vector2(0, -HEADER + 40), "SCORE: %d" % score, HORIZONTAL_ALIGNMENT_RIGHT, board_px.x, 22, Palette.TEXT)
 	var need := Progression.xp_needed(progression.level)
-	draw_string(font, Vector2(board_px.x - 215, -HEADER + 67), "LV %d" % progression.level, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, DIM_TEXT)
+	draw_string(font, Vector2(board_px.x - 215, -HEADER + 67), "LV %d" % progression.level, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Palette.DIM)
 	var bar := Rect2(board_px.x - 160, -HEADER + 59, 160, 7)
-	draw_rect(bar, GRID_COLOR)
-	draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(progression.xp / float(need), 0.0, 1.0), bar.size.y)), Color("ffe27a"))
+	draw_rect(bar, Palette.GRID)
+	draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(progression.xp / float(need), 0.0, 1.0), bar.size.y)), Palette.GOLD)
 	if _pending > 0:
-		draw_string(font, Vector2(0, -HEADER + 120), "INCOMING: %d" % _pending, HORIZONTAL_ALIGNMENT_RIGHT, board_px.x, 18, STUB_OPEN)
+		draw_string(font, Vector2(0, -HEADER + 120), "INCOMING: %d" % _pending, HORIZONTAL_ALIGNMENT_RIGHT, board_px.x, 18, Palette.BAD)
 	_draw_card_rows(font, board_px)
 
 
@@ -585,8 +497,8 @@ func _draw_header(font: Font, board_px: Vector2) -> void:
 func _draw_card_rows(font: Font, board_px: Vector2) -> void:
 	var y := board_px.y + 24.0
 	var x := 0.0
-	var hint_color := DIM_TEXT
-	if mods.has("stash"):
+	var hint_color := Palette.DIM
+	if mods.has(Cards.STASH):
 		var text := "[H] Stash:"
 		draw_string(font, Vector2(x, y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, hint_color)
 		x += font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x + 6.0
@@ -597,12 +509,12 @@ func _draw_card_rows(font: Font, board_px: Vector2) -> void:
 			_draw_atom(Vector2(x + 14.0, y - 5.0), _stash, 1.0, Vector2i(-1, -1), 0.4, 72)
 			x += 34.0
 		x += 14.0
-	if mods.has("reroll"):
+	if mods.has(Cards.REROLL):
 		var text := "[X] Reroll" if _reroll_cd == 0 else "[X] Reroll (%d)" % _reroll_cd
-		draw_string(font, Vector2(x, y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, STUB_OK if _reroll_cd == 0 else hint_color)
+		draw_string(font, Vector2(x, y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Palette.TEXT if _reroll_cd == 0 else hint_color)
 		x += font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x + 20.0
-	if mods.has("two_hand"):
-		draw_string(font, Vector2(x, y), "[Tab] Swap next", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, STUB_OK)
+	if mods.has(Cards.TWO_HAND):
+		draw_string(font, Vector2(x, y), "[Tab] Swap next", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Palette.TEXT)
 
 	# Chips for the owned cards, coloured by rarity.
 	y += 24.0
@@ -618,95 +530,14 @@ func _draw_card_rows(font: Font, board_px: Vector2) -> void:
 		if x + width > board_px.x:
 			x = 0.0
 			y += 22.0
-		var tint := Color("4a90d9")
-		if int(def.rarity) == Cards.Rarity.RARE:
-			tint = Color("b07cff")
-		elif int(def.rarity) == Cards.Rarity.SUPER:
-			tint = Color("ff9a3c")
+		var tint := Palette.RARITY[int(def.rarity)]
 		if bool(def.get("risky", false)):
-			tint = STUB_OPEN
+			tint = Palette.BAD
 		draw_rect(Rect2(x, y - 13.0, width, 19.0), Color(tint, 0.22))
 		draw_rect(Rect2(x, y - 13.0, width, 19.0), Color(tint, 0.8), false, 1.0)
-		draw_string(font, Vector2(x + 7.0, y), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, STUB_OK)
+		draw_string(font, Vector2(x + 7.0, y), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Palette.TEXT)
 		x += width + 6.0
 
 
-func _atom_color(atom: int) -> Color:
-	if Atoms.is_wild(atom):
-		return WILD_COLOR
-	if Atoms.is_bomb(atom):
-		return BOMB_COLOR
-	return COLORS[Atoms.connection_count(atom) - 1]
-
-
-func _pop_scale(p: Vector2i) -> float:
-	if not _pop_age.has(p):
-		return 1.0
-	var x: float = _pop_age[p] / POP_TIME - 1.0
-	return 0.3 + 0.7 * (1.0 + 2.70158 * x * x * x + 1.70158 * x * x)
-
-
-## Cleared atoms waiting for the wave; they swell and glow just before they pop.
-func _draw_ghosts() -> void:
-	for g in _ghosts:
-		var center := _cell_center(g.cell)
-		var lead: float = g.delay - g.age # seconds until the wave arrives
-		var charge := clampf(1.0 - lead / 0.1, 0.0, 1.0)
-		_draw_atom(center, g.mask, 1.0, Vector2i(-1, -1), 1.0 + 0.2 * charge)
-		if charge > 0.0:
-			draw_arc(center, cell_size * (0.3 + 0.1 * charge), 0.0, TAU, 24, Color(1, 1, 1, 0.8 * charge), 3.0 * cell_size / 72.0)
-
-
-func _draw_fx(font: Font) -> void:
-	for f in _fx:
-		var k: float = f.age / f.life
-		var col: Color = f.color
-		col.a = 1.0 - k
-		if f.kind == 0:
-			draw_circle(f.pos, f.size * (1.0 - 0.6 * k), col)
-		elif f.kind == 2:
-			var head: Vector2 = f.pos.lerp(f.to, minf(1.0, k * 2.0))
-			var tail: Vector2 = f.pos.lerp(f.to, clampf(k * 2.0 - 0.5, 0.0, 1.0))
-			draw_line(tail, head, col, (7.0 - 4.0 * k) * cell_size / 72.0)
-		else:
-			draw_arc(f.pos, lerpf(cell_size * 0.2, cell_size * 0.95 * f.get("grow", 1.0), k), 0.0, TAU, 32, col, (6.0 * (1.0 - k) + 1.0) * cell_size / 72.0)
-	for pop in _popups:
-		if pop.age < 0.0:
-			continue
-		var k: float = pop.age / 0.9
-		var col := Color("ffe27a")
-		col.a = 1.0 - k * k
-		var at: Vector2 = pop.pos + Vector2(-40, -30 - 50 * k) * cell_size / 72.0
-		draw_string(font, at, pop.text, HORIZONTAL_ALIGNMENT_CENTER, 80 * cell_size / 72.0, int(34 * cell_size / 72.0), col)
-
-
-## cell is the board cell used to tell open from bonded stubs; pass (-1,-1) to draw all stubs neutral.
 func _draw_atom(center: Vector2, mask: int, alpha: float, cell: Vector2i, scale := 1.0, unit_px := -1) -> void:
-	var unit := cell_size if unit_px < 0 else unit_px
-	var on_board := board.in_bounds(cell)
-	for dir in 4:
-		if mask & (1 << dir):
-			var open := on_board and not board.is_bonded(cell, dir)
-			var col := STUB_OPEN if open else STUB_OK
-			col.a = alpha
-			var tip := center + Vector2(Atoms.OFFSETS[dir]) * (unit * 0.5 * scale)
-			draw_line(center, tip, col, 8.0 * scale * unit / 72.0)
-	var body := _atom_color(mask)
-	body.a = alpha
-	draw_circle(center, unit * 0.27 * scale, body)
-	if Atoms.is_wild(mask):
-		# Four sockets: lit when a neighbour's connection is plugged into the wildcard.
-		for dir in 4:
-			var lit := on_board and board.is_linked(cell, dir)
-			var dot := STUB_OK if lit else WILD_COLOR.darkened(0.45)
-			dot.a = alpha
-			draw_circle(center + Vector2(Atoms.OFFSETS[dir]) * unit * 0.4 * scale, unit * 0.07 * scale, dot)
-		var core := Color.WHITE
-		core.a = alpha
-		draw_arc(center, unit * 0.16 * scale, 0.0, TAU, 20, core, 3.0 * scale * unit / 72.0)
-	if Atoms.is_bomb(mask):
-		var ring := BLAST_COLOR
-		ring.a = alpha
-		draw_arc(center, unit * 0.27 * scale, 0.0, TAU, 24, ring, 4.0 * scale * unit / 72.0)
-		draw_circle(center, unit * 0.09 * scale, ring)
-		draw_line(center + Vector2(0, -unit * 0.27) * scale, center + Vector2(unit * 0.1, -unit * 0.4) * scale, ring, 3.0 * scale * unit / 72.0)
+	AtomPainter.draw(self, center, mask, alpha, scale, cell_size if unit_px < 0 else unit_px, board, cell)

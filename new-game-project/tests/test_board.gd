@@ -1,15 +1,5 @@
-extends SceneTree
+extends "res://tests/test_base.gd"
 ## Run: godot --headless --path new-game-project --script res://tests/test_board.gd
-
-var _failed := 0
-
-
-func _check(cond: bool, name: String) -> void:
-	if cond:
-		print("ok   ", name)
-	else:
-		print("FAIL ", name)
-		_failed += 1
 
 
 func _init() -> void:
@@ -239,5 +229,4 @@ func _init() -> void:
 			victim_depth = b.last_clear_depths[i]
 	_check(b.last_clear_depths.size() == blast.size(), "wave arrays parallel the cleared cells with a bomb")
 
-	print("failures: ", _failed)
-	quit(1 if _failed > 0 else 0)
+	_finish()

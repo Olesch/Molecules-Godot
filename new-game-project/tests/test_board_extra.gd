@@ -1,15 +1,5 @@
-extends SceneTree
-## Run: godot --headless --script res://tests/test_board_extra.gd
-
-var _failed := 0
-
-
-func _check(cond: bool, name: String) -> void:
-	if cond:
-		print("ok   ", name)
-	else:
-		print("FAIL ", name)
-		_failed += 1
+extends "res://tests/test_base.gd"
+## Run: godot --headless --path new-game-project --script res://tests/test_board_extra.gd
 
 
 func _init() -> void:
@@ -91,5 +81,4 @@ func _init() -> void:
 	b.place(Vector2i(0, 1), E)
 	_check(b.place(Vector2i(1, 1), N | E | S | W).size() == 5, "plus molecule clears")
 
-	print("failures: ", _failed)
-	quit(1 if _failed > 0 else 0)
+	_finish()

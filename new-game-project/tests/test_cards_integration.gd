@@ -1,16 +1,6 @@
-extends SceneTree
+extends "res://tests/test_base.gd"
 ## Run: godot --headless --path new-game-project --script res://tests/test_cards_integration.gd
 ## Drives the real Game/Playfield with cards: level-up offer, pick, stash, reroll, strays, gardener.
-
-var _failed := 0
-
-
-func _check(cond: bool, name: String) -> void:
-	if cond:
-		print("ok   ", name)
-	else:
-		print("FAIL ", name)
-		_failed += 1
 
 
 func _init() -> void:
@@ -85,6 +75,7 @@ func _init() -> void:
 	pf.progression.mods.add("gardener")
 	pf.progression.mods.add("thick_skin")
 	pf.board = Board.new(8, 8)
+	pf._fx_rng.seed = 7 # fixed stray landing spots, so they never block the gardener pair below
 	pf.receive_attack(3)
 	_check(pf._pending == 3, "attack queues stray atoms")
 	pf._queue[0] = Atoms.N
@@ -109,5 +100,4 @@ func _init() -> void:
 	_check(pf.board.max_open_ends == 1, "loose ends propagates to the board")
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://test_solo_progress.json"))
-	print("failures: ", _failed)
-	quit(1 if _failed > 0 else 0)
+	_finish()

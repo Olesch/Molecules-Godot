@@ -4,13 +4,6 @@ extends Node2D
 
 signal picked(card_id: String)
 
-const BG := Color("1e2229")
-const PANEL := Color("272c35")
-const GRID := Color("353b46")
-const TEXT := Color("e8ecf1")
-const DIM := Color("8f98a8")
-const RED := Color("ff5d5d")
-const RARITY_COLORS: Array[Color] = [Color("4a90d9"), Color("b07cff"), Color("ff9a3c")]
 const RARITY_NAMES: Array[String] = ["BASIC", "RARE", "SUPER"]
 const ANIM_TIME := 0.25
 const RAISE := 6.0
@@ -145,9 +138,9 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, board_size), Color(0.05, 0.06, 0.08, 0.82 * fade))
 	var top := card_rect(0).position.y if _cards.size() > 0 else board_size.y * 0.5
 	draw_string(font, Vector2(0, top - 50), "LEVEL %d - CHOOSE A CARD" % _level,
-		HORIZONTAL_ALIGNMENT_CENTER, board_size.x, 26, Color(TEXT, fade))
+		HORIZONTAL_ALIGNMENT_CENTER, board_size.x, 26, Color(Palette.TEXT, fade))
 	draw_string(font, Vector2(0, top - 26), "Click a card or press 1-%d" % _cards.size(),
-		HORIZONTAL_ALIGNMENT_CENTER, board_size.x, 14, Color(DIM, fade))
+		HORIZONTAL_ALIGNMENT_CENTER, board_size.x, 14, Color(Palette.DIM, fade))
 	for i in _cards.size():
 		var t := _ease((_age - i * 0.05) / ANIM_TIME)
 		var active := (i == _hover) or (_hover < 0 and i == _focus and _focus_visible())
@@ -173,26 +166,33 @@ func _wrap(font: Font, text: String, size: int, width: float) -> PackedStringArr
 	return lines
 
 
-## Draws wrapped text shrinking the font until it fits max_h. Returns used height.
-func _draw_wrapped(font: Font, text: String, pos: Vector2, width: float, max_h: float,
-		start_size: int, color: Color, center := false) -> float:
+## Wraps text, shrinking the font until it fits max_h. Returns {size, lines, height}.
+func _fit_wrapped(font: Font, text: String, width: float, max_h: float, start_size: int) -> Dictionary:
 	var size := start_size
 	var lines := _wrap(font, text, size, width)
 	while size > 9 and (lines.size() * (size + 4) > max_h):
 		size -= 1
 		lines = _wrap(font, text, size, width)
+	return {"size": size, "lines": lines, "height": float(lines.size() * (size + 4))}
+
+
+## Draws wrapped text shrinking the font until it fits max_h. Returns used height.
+func _draw_wrapped(font: Font, text: String, pos: Vector2, width: float, max_h: float,
+		start_size: int, color: Color, center := false) -> float:
+	var fit := _fit_wrapped(font, text, width, max_h, start_size)
+	var size: int = fit["size"]
 	var y := pos.y + size
-	for l in lines:
+	for l in fit["lines"]:
 		var align := HORIZONTAL_ALIGNMENT_CENTER if center else HORIZONTAL_ALIGNMENT_LEFT
 		draw_string(font, Vector2(pos.x, y), l, align, width, size, color)
 		y += size + 4
-	return lines.size() * (size + 4)
+	return fit["height"]
 
 
 func _draw_card(font: Font, i: int, t: float, active: bool) -> void:
 	var card: Dictionary = _cards[i]
 	var rarity := clampi(int(card.get("rarity", 0)), 0, 2)
-	var rc := RARITY_COLORS[rarity]
+	var rc := Palette.RARITY[rarity]
 	var r := card_rect(i)
 	r.position.y += (1.0 - t) * 40.0 - (RAISE if active else 0.0)
 	var a := t
@@ -204,35 +204,35 @@ func _draw_card(font: Font, i: int, t: float, active: bool) -> void:
 		var gc := Color(rc, (0.28 if rarity == 2 else 0.2) * a)
 		for g in 3:
 			draw_rect(r.grow(2.0 + g * 2.5), Color(gc, gc.a * (1.0 - g * 0.3)), false, 2.0)
-	draw_rect(r, Color(PANEL, a))
+	draw_rect(r, Color(Palette.PANEL, a))
 	var border := Color(rc, a) if active else Color(rc.darkened(0.35), a)
 	draw_rect(r, border, false, 3.0 if active else 2.0)
 	# rarity header strip
 	var strip := Rect2(r.position, Vector2(r.size.x, 26))
 	draw_rect(strip, Color(rc.darkened(0.45 if not active else 0.3), a))
 	draw_string(font, r.position + Vector2(pad, 18), RARITY_NAMES[rarity],
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(TEXT, a))
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(Palette.TEXT, a))
 
 	# keycap
 	var kc := Rect2(r.position + Vector2(r.size.x - 26, 3), Vector2(20, 20))
-	draw_rect(kc, Color(BG, a))
-	draw_rect(kc, Color(DIM, a), false, 1.5)
-	draw_string(font, kc.position + Vector2(0, 15), str(i + 1), HORIZONTAL_ALIGNMENT_CENTER, kc.size.x, 14, Color(TEXT, a))
+	draw_rect(kc, Color(Palette.BG, a))
+	draw_rect(kc, Color(Palette.DIM, a), false, 1.5)
+	draw_string(font, kc.position + Vector2(0, 15), str(i + 1), HORIZONTAL_ALIGNMENT_CENTER, kc.size.x, 14, Color(Palette.TEXT, a))
 
 	var y := r.position.y + 36.0
 	# badges row
 	var bx := r.position.x + pad
 	if card.get("risky", false):
 		var bw := 48.0
-		draw_rect(Rect2(bx, y, bw, 18), Color(RED, 0.2 * a))
-		draw_rect(Rect2(bx, y, bw, 18), Color(RED, a), false, 1.5)
-		draw_string(font, Vector2(bx, y + 13), "RISKY", HORIZONTAL_ALIGNMENT_CENTER, bw, 12, Color(RED, a))
+		draw_rect(Rect2(bx, y, bw, 18), Color(Palette.BAD, 0.2 * a))
+		draw_rect(Rect2(bx, y, bw, 18), Color(Palette.BAD, a), false, 1.5)
+		draw_string(font, Vector2(bx, y + 13), "RISKY", HORIZONTAL_ALIGNMENT_CENTER, bw, 12, Color(Palette.BAD, a))
 		bx += bw + 6.0
 	if card.get("versus_only", false):
 		var vw := 54.0
-		draw_rect(Rect2(bx, y, vw, 18), Color(DIM, 0.15 * a))
-		draw_rect(Rect2(bx, y, vw, 18), Color(DIM, a), false, 1.5)
-		draw_string(font, Vector2(bx, y + 13), "VERSUS", HORIZONTAL_ALIGNMENT_CENTER, vw, 12, Color(DIM, a))
+		draw_rect(Rect2(bx, y, vw, 18), Color(Palette.DIM, 0.15 * a))
+		draw_rect(Rect2(bx, y, vw, 18), Color(Palette.DIM, a), false, 1.5)
+		draw_string(font, Vector2(bx, y + 13), "VERSUS", HORIZONTAL_ALIGNMENT_CENTER, vw, 12, Color(Palette.DIM, a))
 	y += 26.0
 
 	# name (shrink to fit, wrap to 2 lines max)
@@ -241,9 +241,9 @@ func _draw_card(font: Font, i: int, t: float, active: bool) -> void:
 	while nsize > 13 and font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, nsize).x > inner_w:
 		nsize -= 1
 	if font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, nsize).x > inner_w:
-		y += _draw_wrapped(font, nm, Vector2(r.position.x + pad, y), inner_w, 36.0, 15, Color(TEXT, a))
+		y += _draw_wrapped(font, nm, Vector2(r.position.x + pad, y), inner_w, 36.0, 15, Color(Palette.TEXT, a))
 	else:
-		draw_string(font, Vector2(r.position.x + pad, y + nsize), nm, HORIZONTAL_ALIGNMENT_LEFT, inner_w, nsize, Color(TEXT, a))
+		draw_string(font, Vector2(r.position.x + pad, y + nsize), nm, HORIZONTAL_ALIGNMENT_LEFT, inner_w, nsize, Color(Palette.TEXT, a))
 		y += nsize + 6.0
 	draw_line(Vector2(r.position.x + pad, y), Vector2(r.end.x - pad, y), Color(rc, 0.6 * a), 1.0)
 	y += 8.0
@@ -254,24 +254,15 @@ func _draw_card(font: Font, i: int, t: float, active: bool) -> void:
 	var lvl_text := "Unique"
 	if maxn > 1:
 		lvl_text = "Level %d/%d" % [mini(int(card.get("owned", 0)) + 1, maxn), maxn]
-	draw_string(font, Vector2(r.position.x + pad, bottom - 2), lvl_text, HORIZONTAL_ALIGNMENT_LEFT, inner_w, 13, Color(DIM, a))
+	draw_string(font, Vector2(r.position.x + pad, bottom - 2), lvl_text, HORIZONTAL_ALIGNMENT_LEFT, inner_w, 13, Color(Palette.DIM, a))
 	bottom -= 22.0
 	var down: String = card.get("downside", "")
 	if down != "":
 		var dh := 60.0
-		var used := _measure_wrapped(font, "Downside: " + down, inner_w, dh, 12)
-		_draw_wrapped(font, "Downside: " + down, Vector2(r.position.x + pad, bottom - used), inner_w, dh, 12, Color(RED, a))
+		var used: float = _fit_wrapped(font, "Downside: " + down, inner_w, dh, 12)["height"]
+		_draw_wrapped(font, "Downside: " + down, Vector2(r.position.x + pad, bottom - used), inner_w, dh, 12, Color(Palette.BAD, a))
 		bottom -= used + 8.0
 
 	# description fills remaining space
 	var desc: String = card.get("desc", "")
-	_draw_wrapped(font, desc, Vector2(r.position.x + pad, y), inner_w, maxf(bottom - y, 20.0), 15, Color(TEXT, a * 0.92))
-
-
-func _measure_wrapped(font: Font, text: String, width: float, max_h: float, start_size: int) -> float:
-	var size := start_size
-	var lines := _wrap(font, text, size, width)
-	while size > 9 and lines.size() * (size + 4) > max_h:
-		size -= 1
-		lines = _wrap(font, text, size, width)
-	return lines.size() * (size + 4)
+	_draw_wrapped(font, desc, Vector2(r.position.x + pad, y), inner_w, maxf(bottom - y, 20.0), 15, Color(Palette.TEXT, a * 0.92))
