@@ -68,4 +68,38 @@ func _init() -> void:
 	_check(lowest_mini == 2, "Mini Bombs x2 on hex allows bombs down to 2 connections (lowest seen %d)" % lowest_mini)
 	_check(Modifiers.new().min_bomb_connections(hex) == Modifiers.new().min_bomb_connections(Topology.square()), "same bomb threshold on both boards")
 
+	# Both boards deal connection counts alike: the crowded atoms (4+) are as rare on hex as
+	# the 4-connection cross is on a square board, and each extra connection is rarer.
+	var counts := {}
+	for topo in [Topology.square(), Topology.hex()]:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 321
+		var by_count := {}
+		var n := 100000
+		for i in n:
+			var c: int = topo.connection_count(Atoms.random_shape(rng, [], topo))
+			by_count[c] = int(by_count.get(c, 0)) + 1
+		counts[topo.id] = by_count
+	var sq: Dictionary = counts["square"]
+	var hx: Dictionary = counts["hex"]
+	for k in [1, 2, 3]:
+		var diff := absf(float(sq.get(k, 0)) - float(hx.get(k, 0))) / 100000.0
+		_check(diff < 0.02, "%d-connection share matches within 2 points (square %.1f%%, hex %.1f%%)" % [k, sq.get(k, 0) / 1000.0, hx.get(k, 0) / 1000.0])
+	var sq_crowded := float(sq.get(4, 0)) / 100000.0
+	var hx_crowded := float(hx.get(4, 0) + hx.get(5, 0) + hx.get(6, 0)) / 100000.0
+	_check(absf(sq_crowded - hx_crowded) < 0.015, "hex 4+5+6 together are as common as the square 4 (square %.1f%%, hex %.1f%%)" % [sq_crowded * 100.0, hx_crowded * 100.0])
+	_check(hx.get(4, 0) > hx.get(5, 0) and hx.get(5, 0) > hx.get(6, 0), "on hex each extra connection is rarer (4: %d, 5: %d, 6: %d)" % [hx.get(4, 0), hx.get(5, 0), hx.get(6, 0)])
+
+	# Lucky Shapes thins every crowded hex shape, not only the star.
+	var plain_w := Modifiers.new().shape_weights(Topology.hex())
+	var lucky_w := _mods({"lucky_shapes": 2}).shape_weights(Topology.hex())
+	var hex_t := Topology.hex()
+	var thinned := true
+	for i in hex_t.shapes.size():
+		var crowded: bool = hex_t.connection_count(hex_t.shapes[i]) >= 4
+		var expected: float = plain_w[i] * (0.25 if crowded else 1.0)
+		if not is_equal_approx(lucky_w[i], expected):
+			thinned = false
+	_check(thinned, "Lucky Shapes x2 quarters every 4+ connection hex shape and nothing else")
+
 	_finish()

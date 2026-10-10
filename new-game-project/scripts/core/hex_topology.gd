@@ -14,7 +14,10 @@ func _init() -> void:
 	max_connections = 6
 	# single, straight, wide bend, sharp bend, Y, fan, T, two 4-arm shapes, 5 arms, star.
 	shapes = [1, 1 | 8, 1 | 4, 1 | 2, 1 | 4 | 16, 1 | 2 | 4, 1 | 2 | 8, 1 | 2 | 8 | 16, 1 | 2 | 4 | 16, 31, 63]
-	shape_weights = [1.5, 1.5, 1.5, 1.5, 1.0, 1.0, 1.0, 1.0, 1.0, 0.4, 0.3]
+	# Tuned so the share of atoms per connection count matches the square board (total 5.9):
+	# 1 connection 25%, 2 connections 51%, 3 connections 17%, and 4, 5 and 6 together 7%
+	# (the square board's 4-connection cross), each step rarer than the one before.
+	shape_weights = [1.5, 1.0, 1.0, 1.0, 0.4, 0.3, 0.3, 0.14, 0.14, 0.08, 0.05]
 
 
 func neighbor(cell: Vector2i, dir: int) -> Vector2i:

@@ -71,8 +71,12 @@ func shape_weights(topology: Topology = null) -> Array[float]:
 	var w: Array[float] = []
 	for x in topo.shape_weights:
 		w.append(x)
-	if not w.is_empty():
-		w[w.size() - 1] *= pow(0.5, count(Cards.LUCKY_SHAPES))
+	# Lucky Shapes thins out the crowded atoms (4+ connections: the cross on a square board,
+	# the 4-, 5- and 6-arm shapes on a hex board).
+	var crowded := pow(0.5, count(Cards.LUCKY_SHAPES))
+	for i in w.size():
+		if topo.connection_count(topo.shapes[i]) >= Atoms.BOMB_MIN_CONNECTIONS:
+			w[i] *= crowded
 	return w
 
 
