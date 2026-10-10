@@ -44,6 +44,40 @@ func _run() -> void:
 	var home := pf.home_position
 	_check(is_equal_approx(home.x, (g.get_viewport_rect().size.x - size.x) / 2.0), "board is centred by its pixel width")
 
+	# Rotation: wheel down is clockwise, wheel up is the exact opposite, on hex too.
+	var wheel := InputEventMouseButton.new()
+	wheel.pressed = true
+	wheel.position = home + Vector2(300.0, -50.0)
+	pf._queue[0] = (1 << 0) | (1 << 2) # E and SW: a wide bend
+	var wheel_start: int = pf._queue[0]
+	wheel.button_index = MOUSE_BUTTON_WHEEL_DOWN
+	pf._unhandled_input(wheel)
+	_check(pf._queue[0] == pf.topology.rotate_cw(wheel_start), "wheel down rotates clockwise by one hex step")
+	_check(pf._queue[0] == ((1 << 1) | (1 << 3)), "a clockwise step moves E and SW to SE and W")
+	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
+	pf._unhandled_input(wheel)
+	_check(pf._queue[0] == wheel_start, "wheel up undoes it exactly (not a 180 degree flip)")
+	pf._unhandled_input(wheel)
+	var expected := wheel_start
+	for i in pf.topology.dir_count - 1:
+		expected = pf.topology.rotate_cw(expected)
+	_check(pf._queue[0] == expected and pf._queue[0] != wheel_start, "wheel up from the start turns counter-clockwise one step")
+	var spun: int = wheel_start
+	pf._queue[0] = wheel_start
+	for i in 6:
+		pf.rotate_held(true)
+	_check(pf._queue[0] == wheel_start, "six clockwise steps are a full turn")
+	pf.rotate_held(false)
+	pf.rotate_held(true)
+	_check(pf._queue[0] == wheel_start, "counter-clockwise and clockwise cancel")
+	var seen := {}
+	pf._queue[0] = wheel_start
+	for i in 6:
+		pf.rotate_held(false)
+		seen[pf._queue[0]] = true
+	_check(seen.size() == 6, "six counter-clockwise steps visit six different orientations")
+	pf._queue[0] = wheel_start
+
 	# Picking maps every cell centre back to the cell.
 	var all_ok := true
 	for y in 8:

@@ -3,17 +3,17 @@ extends "res://tests/test_base.gd"
 ## Base strength: bombs only on 4-connection atoms, no wildcards; cards unlock more.
 
 
-func _sample(mods: Modifiers, n: int) -> Dictionary:
+func _sample(mods: Modifiers, n: int, topology: Topology = null) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 99
 	var stats := {"wild": 0, "bomb": 0, "bomb_connections": {}, "total": n}
 	for i in n:
-		var atom := Atoms.random_atom(rng, mods.bomb_chance(), mods.wild_chance(), mods.shape_weights(), mods.min_bomb_connections())
+		var atom := Atoms.random_atom(rng, mods.bomb_chance(), mods.wild_chance(), mods.shape_weights(topology), mods.min_bomb_connections(topology), topology)
 		if Atoms.is_wild(atom):
 			stats.wild += 1
 		elif Atoms.is_bomb(atom):
 			stats.bomb += 1
-			var c := Atoms.connection_count(atom)
+			var c := (topology if topology != null else Topology.square()).connection_count(atom)
 			stats.bomb_connections[c] = int(stats.bomb_connections.get(c, 0)) + 1
 	return stats
 
@@ -51,5 +51,21 @@ func _init() -> void:
 		Atoms.random_atom(a, 0.0, 0.0)
 		Atoms.random_atom(b, 1.0, 1.0)
 	_check(a.randi() == b.randi(), "random_atom always draws the same number of rolls")
+
+	# Hexagonal boards follow the same threshold: bombs start at 4 connections, Mini Bombs lowers it.
+	var hex := Topology.hex()
+	var hex_base := _sample(Modifiers.new(), 40000, hex)
+	var lowest_hex := 99
+	for c in hex_base.bomb_connections.keys():
+		lowest_hex = mini(lowest_hex, int(c))
+	_check(hex_base.bomb > 0 and lowest_hex == 4, "hex bombs start at 4 connections (lowest seen %d)" % lowest_hex)
+	_check(hex_base.bomb_connections.has(5) or hex_base.bomb_connections.has(6), "hex bombs also appear on 5 and 6 connection atoms")
+	_check(hex_base.wild == 0, "no wildcards on hex either")
+	var hex_mini := _sample(_mods({"mini_bombs": 2}), 40000, hex)
+	var lowest_mini := 99
+	for c in hex_mini.bomb_connections.keys():
+		lowest_mini = mini(lowest_mini, int(c))
+	_check(lowest_mini == 2, "Mini Bombs x2 on hex allows bombs down to 2 connections (lowest seen %d)" % lowest_mini)
+	_check(Modifiers.new().min_bomb_connections(hex) == Modifiers.new().min_bomb_connections(Topology.square()), "same bomb threshold on both boards")
 
 	_finish()

@@ -59,7 +59,7 @@ func bomb_chance() -> float:
 ## Atoms with at least this many connections can be bombs (4 at the start, Mini Bombs lowers it).
 func min_bomb_connections(topology: Topology = null) -> int:
 	var topo := topology if topology != null else Topology.square()
-	return maxi(1, topo.max_connections - count(Cards.MINI_BOMBS))
+	return maxi(1, Atoms.BOMB_MIN_CONNECTIONS - count(Cards.MINI_BOMBS))
 
 
 func wild_chance() -> float:

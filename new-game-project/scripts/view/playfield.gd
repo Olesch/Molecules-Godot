@@ -249,7 +249,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func rotate_held(clockwise := true) -> void:
 	if finished or _offer_open() or Atoms.is_wild(_queue[0]):
 		return
-	var times := 1 if clockwise else 3
+	# Counter-clockwise is dir_count - 1 clockwise steps (3 only works on a square board).
+	var times := 1 if clockwise else board.topology.dir_count - 1
 	for i in times:
 		_queue[0] = board.topology.rotate_cw(_queue[0])
 	sfx_requested.emit("rotate", 1.0)

@@ -64,7 +64,7 @@ static func is_wild(atom: int) -> bool:
 
 
 ## Chances and shape weights can be overridden (powerup cards change them); empty weights
-## mean the topology's own. min_bomb_connections < 0 means "only the most-connected shape".
+## mean the topology's own. min_bomb_connections < 0 means the default, BOMB_MIN_CONNECTIONS (4 on every board).
 ## The rolls are always drawn, so the random sequence does not depend on the chances.
 static func random_atom(rng: RandomNumberGenerator, bomb_chance := BOMB_CHANCE, wild_chance := WILD_CHANCE, weights: Array[float] = [], min_bomb_connections := -1, topology: Topology = null) -> int:
 	var topo := topology if topology != null else Topology.square()
@@ -73,7 +73,7 @@ static func random_atom(rng: RandomNumberGenerator, bomb_chance := BOMB_CHANCE, 
 	var bomb_roll := rng.randf()
 	if wild_roll < wild_chance:
 		return WILD
-	var min_conn := min_bomb_connections if min_bomb_connections >= 0 else topo.max_connections
+	var min_conn := min_bomb_connections if min_bomb_connections >= 0 else BOMB_MIN_CONNECTIONS
 	if topo.connection_count(atom) >= min_conn and bomb_roll < bomb_chance:
 		atom |= BOMB
 	return atom
