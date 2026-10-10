@@ -4,6 +4,7 @@ extends RefCounted
 ## It is fully predictable. The atoms to drop next are chosen ahead of time and shown as
 ## transparent "ghosts" with a countdown in placements. Placing an atom on a ghost's cell
 ## pushes that ghost to another free cell. Above DOUBLE_ABOVE_LEVEL two atoms drop at once.
+## Two flavours: turn-based (the countdown counts placements) and timed (it counts seconds).
 ## Pure logic: the Playfield draws the ghosts and places the atoms.
 
 const BASE_INTERVAL := 8 ## placements between drops at level 1
@@ -12,7 +13,14 @@ const LEVELS_PER_STEP := 2 ## the interval shrinks by one placement every this m
 const DOUBLE_ABOVE_LEVEL := 10 ## after this level two atoms drop each time
 const FIRST_GRACE := 2 ## extra placements before the very first drop of a game
 
-var countdown := 0 ## placements left until the ghosts drop
+# Timed flavour: the same shape of schedule, in seconds.
+const BASE_SECONDS := 18.0 ## seconds between drops at level 1
+const MIN_SECONDS := 5.0
+const SECONDS_PER_STEP := 1.5 ## the gap shrinks by this much every LEVELS_PER_STEP levels
+const FIRST_GRACE_SECONDS := 6.0
+
+var timed := false ## true: countdown is in seconds and advance() runs it; false: placements and tick()
+var countdown := 0.0 ## placements (turn-based) or seconds (timed) left until the ghosts drop
 var ghosts: Array[Dictionary] = [] ## each {cell: Vector2i, mask: int}
 
 
@@ -22,6 +30,12 @@ static func interval(level: int) -> int:
 	return maxi(MIN_INTERVAL, BASE_INTERVAL - steps)
 
 
+## Seconds between drops at the given level (timed flavour).
+static func seconds(level: int) -> float:
+	var steps := floori((level - 1) / float(LEVELS_PER_STEP))
+	return maxf(MIN_SECONDS, BASE_SECONDS - steps * SECONDS_PER_STEP)
+
+
 ## How many atoms drop each time at the given level.
 static func spawn_count(level: int) -> int:
 	return 2 if level > DOUBLE_ABOVE_LEVEL else 1
@@ -29,7 +43,7 @@ static func spawn_count(level: int) -> int:
 
 ## Starts a fresh game: first countdown (with grace) and the first ghosts.
 func start(board: Board, level: int, rng: RandomNumberGenerator) -> void:
-	countdown = interval(level) + FIRST_GRACE
+	countdown = seconds(level) + FIRST_GRACE_SECONDS if timed else float(interval(level) + FIRST_GRACE)
 	plan(board, level, rng)
 
 
@@ -45,8 +59,13 @@ func plan(board: Board, level: int, rng: RandomNumberGenerator) -> void:
 
 ## Sets the next countdown and plans the next ghosts; call after the drops were applied.
 func schedule_next(board: Board, level: int, rng: RandomNumberGenerator) -> void:
-	countdown = interval(level)
+	countdown = seconds(level) if timed else float(interval(level))
 	plan(board, level, rng)
+
+
+## What to show next to a ghost: whole placements, or whole seconds rounded up.
+func countdown_label() -> int:
+	return int(ceil(countdown))
 
 
 ## Index of the ghost standing on cell, or -1.
@@ -66,15 +85,24 @@ func relocate_at(cell: Vector2i, board: Board, rng: RandomNumberGenerator) -> Ve
 	return _relocate(i, board, rng)
 
 
-## Counts one placement. Returns the atoms to drop now ({cell, mask}); empty until the
-## countdown runs out. After a drop, apply the atoms and call schedule_next().
+## Counts one placement (turn-based). Returns the atoms to drop now ({cell, mask}); empty
+## until the countdown runs out. After a drop, apply the atoms and call schedule_next().
 func tick(board: Board, rng: RandomNumberGenerator) -> Array[Dictionary]:
+	return _count(1.0, board, rng)
+
+
+## Lets delta seconds pass (timed). Same result as tick().
+func advance(delta: float, board: Board, rng: RandomNumberGenerator) -> Array[Dictionary]:
+	return _count(delta, board, rng)
+
+
+func _count(amount: float, board: Board, rng: RandomNumberGenerator) -> Array[Dictionary]:
 	for i in range(ghosts.size() - 1, -1, -1):
 		if not board.is_empty(ghosts[i].cell):
 			_relocate(i, board, rng) # something else filled the cell
-	countdown -= 1
+	countdown -= amount
 	var drops: Array[Dictionary] = []
-	if countdown <= 0:
+	if countdown <= 0.0:
 		drops.assign(ghosts)
 		ghosts.clear()
 	return drops

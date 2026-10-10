@@ -91,6 +91,36 @@ func _init() -> void:
 			_check(last_delta == 1, "no drop before the countdown ends (placement %d)" % (i + 1))
 	_check(last_delta == 3, "the final placement adds the player's atom plus two strays (got %d)" % last_delta)
 
+	# Timed flavour on a real playfield: the clock runs the drop, a card pick pauses it.
+	pf.versus = false
+	pf.timed = true
+	pf.progression.level = 1
+	pf.board = Board.new(8, 8)
+	pf._danger.timed = true
+	pf._danger.start(pf.board, 1, pf._fx_rng)
+	pf._queue[0] = Atoms.N
+	pf.try_place(_free_cell(pf, _ghost_cells(pf)))
+	var seconds_left: float = pf._danger.countdown
+	_check(is_equal_approx(seconds_left, Danger.seconds(1) + Danger.FIRST_GRACE_SECONDS), "placing does not move the timed clock")
+	pf._process(5.0)
+	_check(is_equal_approx(pf._danger.countdown, seconds_left - 5.0), "the clock runs with _process")
+	pf.progression.add_xp(500)
+	pf._maybe_offer()
+	_check(pf._offer_open(), "level-up offer opens in timed mode")
+	var frozen: float = pf._danger.countdown
+	pf._process(100.0)
+	_check(is_equal_approx(pf._danger.countdown, frozen), "the clock stops while a card pick is open")
+	pf._card_overlay.hide_offer()
+	pf.progression.pick_levels.clear()
+	var announced_cell: Vector2i = pf._danger.ghosts[0].cell
+	var announced_mask: int = pf._danger.ghosts[0].mask
+	var fill_before := _filled(pf)
+	pf._process(frozen + 0.1)
+	_check(pf.board.get_atom(announced_cell) == announced_mask and _filled(pf) == fill_before + 1, "the announced stray lands when the time is up")
+	var level_now: int = pf.progression.level # the XP above leveled the player up
+	_check(pf._danger.ghosts.size() == Danger.spawn_count(level_now) and is_equal_approx(pf._danger.countdown, Danger.seconds(level_now)), "the next timed stray is announced with the new level's gap")
+	pf.timed = false
+
 	# Versus has no solo danger.
 	pf.versus = true
 	_check(not pf._danger_active(), "versus has no solo danger")

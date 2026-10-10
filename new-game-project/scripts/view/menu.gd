@@ -7,6 +7,7 @@ signal choose(mode: String, address: String)
 const CONTROLS_HINT := "Click: place   R / right-click / wheel: rotate   M: music   Esc: menu   Cards: H stash, X reroll, Tab swap"
 
 var _solo_btn: Button
+var _timed_btn: Button
 var _host_btn: Button
 var _join_btn: Button
 var _cancel_btn: Button
@@ -47,8 +48,10 @@ func _init() -> void:
 	box.add_child(sub)
 
 	_spacer(box, 18)
-	_solo_btn = _make_button("Solo", Palette.GOOD)
+	_solo_btn = _make_button("Solo: turn-based", Palette.GOOD)
 	box.add_child(_solo_btn)
+	_timed_btn = _make_button("Solo: time pressure", Palette.PURPLE)
+	box.add_child(_timed_btn)
 	_host_btn = _make_button("Host online game", Palette.BLUE)
 	box.add_child(_host_btn)
 	_spacer(box, 6)
@@ -98,6 +101,7 @@ func _init() -> void:
 	box.add_child(hint)
 
 	_solo_btn.pressed.connect(func() -> void: choose.emit("solo", ""))
+	_timed_btn.pressed.connect(func() -> void: choose.emit("solo_timed", ""))
 	_host_btn.pressed.connect(func() -> void: choose.emit("host", ""))
 	_join_btn.pressed.connect(_on_join)
 	_cancel_btn.pressed.connect(func() -> void: choose.emit("cancel", ""))
@@ -115,6 +119,7 @@ func set_status(text: String) -> void:
 
 func set_busy(busy: bool) -> void:
 	_solo_btn.disabled = busy
+	_timed_btn.disabled = busy
 	_host_btn.disabled = busy
 	_join_btn.disabled = busy
 	_reset_btn.disabled = busy

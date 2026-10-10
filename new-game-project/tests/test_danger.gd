@@ -105,4 +105,33 @@ func _init() -> void:
 	tiny.place(d4.ghosts[0].cell, Atoms.N)
 	_check(d4.relocate_at(d4.ghosts[0].cell, tiny, rng).x < 0 and d4.ghosts.is_empty(), "a ghost with no room left vanishes")
 
+	# Timed flavour: seconds instead of placements.
+	_check(Danger.seconds(1) == 18.0 and Danger.seconds(3) == 16.5, "timed gap starts at 18 s and shrinks 1.5 s per 2 levels")
+	_check(Danger.seconds(40) == Danger.MIN_SECONDS, "timed gap has a floor")
+	var timed_monotonic := true
+	for level in range(1, 40):
+		if Danger.seconds(level + 1) > Danger.seconds(level):
+			timed_monotonic = false
+	_check(timed_monotonic, "higher levels are never slower (timed)")
+	var tb := Board.new(8, 8)
+	var td := Danger.new()
+	td.timed = true
+	td.start(tb, 1, rng)
+	_check(is_equal_approx(td.countdown, Danger.seconds(1) + Danger.FIRST_GRACE_SECONDS), "timed start has a grace period")
+	_check(td.countdown_label() == 24, "countdown label rounds seconds up")
+	var announced_t: Dictionary = td.ghosts[0].duplicate()
+	_check(td.advance(10.0, tb, rng).is_empty() and is_equal_approx(td.countdown, 14.0), "ten seconds pass without a drop")
+	_check(td.countdown_label() == 14, "label follows the clock")
+	var early_drop := td.advance(13.9, tb, rng)
+	_check(early_drop.is_empty(), "still nothing just before the end")
+	var timed_drop := td.advance(0.2, tb, rng)
+	_check(timed_drop.size() == 1 and timed_drop[0].cell == announced_t.cell and timed_drop[0].mask == announced_t.mask, "the timed drop is the announced atom")
+	tb.place(timed_drop[0].cell, timed_drop[0].mask)
+	td.schedule_next(tb, 1, rng)
+	_check(is_equal_approx(td.countdown, Danger.seconds(1)) and td.ghosts.size() == 1, "next timed round has no grace")
+	var td2 := Danger.new()
+	td2.timed = true
+	td2.start(Board.new(8, 8), 11, rng)
+	_check(td2.ghosts.size() == 2, "two timed strays after level 10")
+
 	_finish()

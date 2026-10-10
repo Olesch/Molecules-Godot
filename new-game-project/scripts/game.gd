@@ -93,13 +93,14 @@ func _layout() -> void:
 
 # --- Sessions ---------------------------------------------------------------
 
-func _make_local(progression: Progression, versus: bool) -> void:
+func _make_local(progression: Progression, versus: bool, timed := false) -> void:
 	_free_playfields()
 	_local = Playfield.new()
 	_local.cell_size = LOCAL_CELL
 	_local.interactive = true
 	_local.progression = progression
 	_local.versus = versus
+	_local.timed = timed
 	add_child(_local)
 	_local.progression_changed.connect(_on_progression_changed)
 	_local.sfx_requested.connect(_play)
@@ -122,12 +123,12 @@ func _process(_delta: float) -> void:
 	_mixer.set_fill(fill)
 
 
-func _start_solo() -> void:
+func _start_solo(timed := false) -> void:
 	_mode = Mode.SOLO
 	_menu.visible = false
 	if _solo_progression == null:
 		_solo_progression = Progression.load_from(solo_progress_path)
-	_make_local(_solo_progression, false)
+	_make_local(_solo_progression, false, timed)
 	_layout()
 	_local.start(randi())
 	_mixer.restart()
@@ -167,6 +168,8 @@ func _on_menu_choose(mode: String, address: String) -> void:
 	match mode:
 		"solo":
 			_start_solo()
+		"solo_timed":
+			_start_solo(true)
 		"host":
 			var err := _net.host()
 			if err != OK:
