@@ -182,5 +182,11 @@ func _init() -> void:
 	var full := Board.new(2, 2)
 	_check(full.add_garbage(10, grng).size() <= 4, "garbage cannot exceed free cells")
 
+	# Fill ratio drives the music layers.
+	b = Board.new(2, 2)
+	_check(b.fill_ratio() == 0.0, "empty board fill 0")
+	b.place(Vector2i(0, 0), N)
+	_check(is_equal_approx(b.fill_ratio(), 0.25), "one of four cells = 0.25")
+
 	print("failures: ", _failed)
 	quit(1 if _failed > 0 else 0)

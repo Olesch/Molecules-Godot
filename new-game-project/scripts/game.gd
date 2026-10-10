@@ -22,7 +22,7 @@ var _net: NetSession
 var _local: Playfield
 var _remote: Playfield
 var _sfx := {}
-var _music: AudioStreamPlayer
+var _mixer: MusicMixer
 var _sfx_rng := RandomNumberGenerator.new()
 var _waiting_for_rematch := false
 
@@ -36,7 +36,8 @@ func _ready() -> void:
 			player.stream = load(path)
 			add_child(player)
 			_sfx[sfx_name] = player
-	_start_music()
+	_mixer = MusicMixer.new()
+	add_child(_mixer)
 
 	# NetSession needs the same node path on both peers: /root/Game/NetSession.
 	_net = NetSession.new()
@@ -59,21 +60,6 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_layout)
 	_layout()
 	queue_redraw()
-
-
-func _start_music() -> void:
-	const PATH := "res://assets/music/theme.wav"
-	if not ResourceLoader.exists(PATH):
-		return
-	var stream: AudioStreamWAV = load(PATH).duplicate()
-	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
-	stream.loop_begin = 0
-	stream.loop_end = int(stream.get_length() * stream.mix_rate)
-	_music = AudioStreamPlayer.new()
-	_music.stream = stream
-	_music.volume_db = -7.0
-	add_child(_music)
-	_music.play()
 
 
 func _play(sfx_name: String, pitch := 1.0) -> void:
@@ -127,12 +113,20 @@ func _free_playfields() -> void:
 	_remote = null
 
 
+func _process(_delta: float) -> void:
+	var fill := 0.0
+	if _local and not _local.finished:
+		fill = _local.board.fill_ratio()
+	_mixer.set_fill(fill)
+
+
 func _start_solo() -> void:
 	_mode = Mode.SOLO
 	_menu.visible = false
 	_make_local()
 	_layout()
 	_local.start(randi())
+	_mixer.restart()
 
 
 func _enter_versus() -> void:
@@ -213,6 +207,7 @@ func _on_game_start(seed_value: int) -> void:
 	_waiting_for_rematch = false
 	_local.start(seed_value)
 	_remote.start(seed_value)
+	_mixer.restart()
 	_remote.set_overlay("")
 	_local.set_overlay("")
 
@@ -259,14 +254,14 @@ func _on_restart_requested() -> void:
 		_net.send_ready()
 	elif _mode == Mode.SOLO:
 		_local.start(randi())
+		_mixer.restart()
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
 			KEY_M:
-				if _music:
-					_music.stream_paused = not _music.stream_paused
+				_mixer.toggle_pause()
 			KEY_ESCAPE:
 				if _mode == Mode.SOLO or _mode == Mode.VERSUS:
 					_back_to_menu()

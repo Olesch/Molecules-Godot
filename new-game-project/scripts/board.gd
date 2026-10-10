@@ -33,6 +33,15 @@ func is_empty(p: Vector2i) -> bool:
 	return in_bounds(p) and get_atom(p) == 0
 
 
+## Share of occupied cells, 0..1.
+func fill_ratio() -> float:
+	var used := 0
+	for c in _cells:
+		if c != 0:
+			used += 1
+	return float(used) / _cells.size()
+
+
 func is_full() -> bool:
 	for c in _cells:
 		if c == 0:
