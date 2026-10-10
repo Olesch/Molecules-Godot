@@ -609,6 +609,20 @@ func _draw() -> void:
 	var font := ThemeDB.fallback_font
 	var board_px := board_pixel_size()
 
+	# Molecules that can never be finished (an end is blocked) get a subtle red background.
+	var seen := {}
+	for y in BOARD_H:
+		for x in BOARD_W:
+			var start := Vector2i(x, y)
+			if seen.has(start) or board.get_atom(start) == 0:
+				continue
+			var group := board.molecule_at(start)
+			for c in group:
+				seen[c] = true
+			if board.is_dead(group):
+				for c in group:
+					draw_colored_polygon(_cell_poly(c), Color(Palette.BAD, 0.12))
+
 	# Hovering an atom lights up its molecule: cells with an open connection red, fully bonded blue.
 	if interactive and not finished and board.get_atom(_hover) != 0:
 		for c in board.molecule_at(_hover):

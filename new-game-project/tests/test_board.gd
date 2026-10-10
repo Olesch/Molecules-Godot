@@ -26,6 +26,18 @@ func _init() -> void:
 	_check(b.place(Vector2i(1, 0), S).is_empty(), "no mutual bond, no clear")
 	_check(not b.is_bonded(Vector2i(0, 0), 1), "not bonded")
 
+	# Blocked ends: the E atom at (0,0) points at an atom facing S, so it can never close.
+	var dead_group: Array[Vector2i] = [Vector2i(0, 0)]
+	_check(b.is_dead(dead_group), "an end facing an occupied non-pointing cell is dead")
+	var live := Board.new(4, 4)
+	live.place(Vector2i(0, 0), E)
+	var live_group: Array[Vector2i] = [Vector2i(0, 0)]
+	_check(not live.is_dead(live_group), "an end facing an empty cell is still alive")
+	var edge := Board.new(4, 4)
+	edge.place(Vector2i(3, 0), E)
+	var edge_group: Array[Vector2i] = [Vector2i(3, 0)]
+	_check(edge.is_dead(edge_group), "an end pointing off the board is dead")
+
 	# Pointing off the board is an open end.
 	b = Board.new(3, 3)
 	_check(b.place(Vector2i(0, 0), N).is_empty(), "edge-pointing atom stays")

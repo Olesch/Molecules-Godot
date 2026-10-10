@@ -188,6 +188,27 @@ func is_closed(group: Array[Vector2i]) -> bool:
 	return open_end_count(group) <= allowed
 
 
+## Open ends that can never be bonded as things stand: they point off the board or at an
+## occupied cell whose atom does not point back.
+func blocked_end_count(group: Array[Vector2i]) -> int:
+	var blocked := 0
+	for c in group:
+		for dir in topology.dir_count:
+			if (get_atom(c) & (1 << dir)) and not is_bonded(c, dir):
+				var n := topology.neighbor(c, dir)
+				if not in_bounds(n) or get_atom(n) != 0:
+					blocked += 1
+	return blocked
+
+
+## True when the group can no longer be finished: more blocked ends than it may leave open.
+func is_dead(group: Array[Vector2i]) -> bool:
+	if group.is_empty():
+		return false
+	var allowed := max_open_ends if group.size() >= LOOSE_MIN_SIZE else 0
+	return blocked_end_count(group) > allowed
+
+
 func open_end_count(group: Array[Vector2i]) -> int:
 	var open := 0
 	for c in group:
