@@ -625,8 +625,22 @@ func _process(delta: float) -> void:
 	if _incoming_active() and not finished and not _offer_open():
 		_advance_incoming(delta)
 	position = home_position + _fx.shake_offset()
-	if _fx.is_busy() or position != home_position or (_danger_active() and not _danger.ghosts.is_empty()) or not _incoming.ghosts.is_empty():
+	if _fx.is_busy() or position != home_position or _shows_wildcard() or (_danger_active() and not _danger.ghosts.is_empty()) or not _incoming.ghosts.is_empty():
 		queue_redraw()
+
+
+## True when a wildcard is on screen (they animate, so the board redraws every frame).
+func _shows_wildcard() -> bool:
+	if board == null:
+		return false
+	for y in board.height:
+		for x in board.width:
+			if Atoms.is_wild(board.get_atom(Vector2i(x, y))):
+				return true
+	for atom in _queue:
+		if Atoms.is_wild(atom):
+			return true
+	return false
 
 
 func _draw() -> void:
