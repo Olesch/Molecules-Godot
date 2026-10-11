@@ -152,4 +152,26 @@ func _init() -> void:
 	nov.start(Board.new(8, 8), 1, rng)
 	_check(is_equal_approx(nov.countdown, Danger.seconds(1) + Danger.FIRST_GRACE_SECONDS), "without overrides nothing changes")
 
+	# Placement priorities: no arm at the border, then none at a dead molecule, then none at a live one.
+	for topo in [Topology.square(), Topology.hex()]:
+		var bad_border := 0
+		var bad_dead := 0
+		var bad_live := 0
+		for seed in 40:
+			var r := RandomNumberGenerator.new()
+			r.seed = seed
+			var pb := Board.new(8, 8, topo)
+			pb.preplace(10, r)
+			var pd := Danger.new()
+			pd.count_override = 2
+			pd.plan(pb, 1, r)
+			for gh in pd.ghosts:
+				for dir in topo.dir_count:
+					if not (gh.mask & (1 << dir)):
+						continue
+					var n: Vector2i = topo.neighbor(gh.cell, dir)
+					if not pb.in_bounds(n):
+						bad_border += 1
+		_check(bad_border == 0, "stray atoms never point at the border while a better spot exists (%s)" % topo.id)
+
 	_finish()
