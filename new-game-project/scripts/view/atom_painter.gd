@@ -7,14 +7,9 @@ const ATOM_COLOR := Color("4a90d9")
 const BOMB_COLOR := Color("2b2f38")
 
 
-## Wildcards cycle through the rainbow; `phase` (0..1) offsets the hue so neighbours differ.
-static func rainbow(phase := 0.0) -> Color:
-	return Color.from_hsv(fmod(Time.get_ticks_msec() / 1000.0 * 1.5 + phase, 1.0), 0.7, 1.0)
-
-
-static func color(atom: int, phase := 0.0) -> Color:
+static func color(atom: int) -> Color:
 	if Atoms.is_wild(atom):
-		return rainbow(phase)
+		return Palette.PURPLE
 	if Atoms.is_bomb(atom):
 		return BOMB_COLOR
 	return ATOM_COLOR
@@ -32,14 +27,14 @@ static func draw(canvas: CanvasItem, center: Vector2, mask: int, alpha: float, s
 			col.a = alpha
 			var tip := center + topo.dir_vector(dir) * (unit * 0.5 * scale)
 			canvas.draw_line(center, tip, col, 8.0 * scale * unit / 72.0)
-	var body := color(mask, (center.x + center.y) * 0.003)
+	var body := color(mask)
 	body.a = alpha
 	canvas.draw_circle(center, unit * 0.27 * scale, body)
 	if Atoms.is_wild(mask):
 		# One socket per direction: lit when a neighbour's connection is plugged into the wildcard.
 		for dir in topo.dir_count:
 			var lit := on_board and board.is_linked(cell, dir)
-			var dot := Palette.TEXT if lit else rainbow((center.x + center.y) * 0.003).darkened(0.5)
+			var dot := Palette.TEXT if lit else Palette.PURPLE.darkened(0.45)
 			dot.a = alpha
 			canvas.draw_circle(center + topo.dir_vector(dir) * unit * 0.4 * scale, unit * 0.07 * scale, dot)
 		var core := Color.WHITE
