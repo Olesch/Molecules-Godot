@@ -261,10 +261,11 @@ func _scatter(count: int, rng: RandomNumberGenerator, allow_specials: bool) -> A
 
 
 ## Where a loose atom of this shape should go. Every free cell and rotation is scored and the
-## best one picked (ties at random). In order of importance an arm should not point at
-## 1) the board border, 2) a closed side of a molecule that can no longer be finished,
-## 3) a closed side of a molecule that can still be finished, 4) an open side of a dead
-## molecule, 5) an open side of a live one, 6) anything goes.
+## best one picked (ties at random). In order of importance the atom should not
+## 1) have an arm at the board border, 2) sit in front of a live molecule's open end without
+## pointing back at it (that would block the molecule), 3) point at a closed side of a dead
+## molecule, 4) of a live molecule, 5) point at an open side of a dead molecule, 6) of a live
+## one, 7) anything goes.
 ## A neighbour's side is open when it has a connection (or is a wildcard) facing the new atom.
 ## `reserved` cells and `avoid` are skipped, `rotate` false keeps the given orientation, and
 ## `skip_closing` rejects spots where the atom would complete a molecule.
@@ -293,21 +294,35 @@ func stray_spot(rng: RandomNumberGenerator, shape: int, rotate := true, avoid :=
 			if p == avoid or get_atom(p) != 0 or reserved.has(p):
 				continue
 			for m in rotations:
-				var border := 0
-				var facing_dead := 0
-				var facing_live := 0
-				for dir in topology.dir_count:
-					if not (m & (1 << dir)):
-						continue
-					var n := topology.neighbor(p, dir)
-					if not in_bounds(n):
-						border += 1
-					elif get_atom(n) != 0:
-						if dead[n]:
-							facing_dead += 1
-						else:
-							facing_live += 1
-				candidates.append({"cell": p, "mask": m, "score": border * 1000000 + facing_dead * 1000 + facing_live, "r": rng.randf()})
+					var border := 0
+					var blocks := 0
+					var closed_dead := 0
+					var closed_live := 0
+					var open_dead := 0
+					var open_live := 0
+					for dir in topology.dir_count:
+						var n := topology.neighbor(p, dir)
+						var back := (dir + topology.dir_count / 2) % topology.dir_count
+						var points := (m & (1 << dir)) != 0
+						if in_bounds(n) and get_atom(n) != 0 and not dead[n] and not points and (get_atom(n) & (1 << back)) != 0:
+							blocks += 1 # this atom would block the neighbour's open end
+						if not points:
+							continue
+						if not in_bounds(n):
+							border += 1
+						elif get_atom(n) != 0:
+							var is_open := Atoms.is_wild(get_atom(n)) or (get_atom(n) & (1 << back)) != 0
+							if dead[n]:
+								if is_open:
+									open_dead += 1
+								else:
+									closed_dead += 1
+							elif is_open:
+								open_live += 1
+							else:
+								closed_live += 1
+					var score := border * 10000000000 + blocks * 100000000 + closed_dead * 1000000 + closed_live * 10000 + open_dead * 100 + open_live
+					candidates.append({"cell": p, "mask": m, "score": score, "r": rng.randf()})
 	candidates.sort_custom(func(a, b): return a.score < b.score or (a.score == b.score and a.r < b.r))
 	for cand in candidates:
 		if not skip_closing:

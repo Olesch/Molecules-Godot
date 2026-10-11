@@ -174,4 +174,25 @@ func _init() -> void:
 						bad_border += 1
 		_check(bad_border == 0, "stray atoms never point at the border while a better spot exists (%s)" % topo.id)
 
+	# stray_spot priorities, each with a single free cell so only the rotation can vary.
+	var sr := RandomNumberGenerator.new()
+	sr.seed = 11
+	var sb := Board.new(5, 5)
+	sb.place(Vector2i(2, 2), Atoms.E) # a live atom whose open end faces (3, 2)
+	var reserved := {}
+	for yy in 5:
+		for xx in 5:
+			if Vector2i(xx, yy) != Vector2i(3, 2):
+				reserved[Vector2i(xx, yy)] = true
+	var spot := sb.stray_spot(sr, Atoms.E, true, Vector2i(-1, -1), reserved)
+	_check(spot.cell == Vector2i(3, 2) and spot.mask == Atoms.W, "a stray in front of a live open end points back at it instead of blocking it")
+	reserved.clear()
+	for yy in 5:
+		for xx in 5:
+			if Vector2i(xx, yy) != Vector2i(4, 2):
+				reserved[Vector2i(xx, yy)] = true
+	var edge_board := Board.new(5, 5)
+	spot = edge_board.stray_spot(sr, Atoms.E, true, Vector2i(-1, -1), reserved)
+	_check(spot.mask != Atoms.E, "a stray on the edge does not point off the board (%d)" % spot.get("mask", -1))
+
 	_finish()
