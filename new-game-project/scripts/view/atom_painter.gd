@@ -2,14 +2,22 @@ class_name AtomPainter
 extends RefCounted
 ## Draws one atom (stubs, body, wildcard sockets, bomb ring) on any CanvasItem.
 
-## Every atom cycles through the rainbow; `phase` (0..1) offsets the hue so neighbours differ.
-## Bombs and wildcards are told apart by their ring and sockets, not by colour.
+## Plain atoms are all blue whatever their connection count; bombs and wildcards stand out.
+const ATOM_COLOR := Color("4a90d9")
+const BOMB_COLOR := Color("2b2f38")
+
+
+## Wildcards cycle through the rainbow; `phase` (0..1) offsets the hue so neighbours differ.
 static func rainbow(phase := 0.0) -> Color:
 	return Color.from_hsv(fmod(Time.get_ticks_msec() / 1000.0 * 1.5 + phase, 1.0), 0.7, 1.0)
 
 
-static func color(_atom: int, phase := 0.0) -> Color:
-	return rainbow(phase)
+static func color(atom: int, phase := 0.0) -> Color:
+	if Atoms.is_wild(atom):
+		return rainbow(phase)
+	if Atoms.is_bomb(atom):
+		return BOMB_COLOR
+	return ATOM_COLOR
 
 
 ## cell is the board cell used to tell open from bonded stubs; pass (-1,-1) or a null board
