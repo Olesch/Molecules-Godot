@@ -81,4 +81,28 @@ func _init() -> void:
 	b.place(Vector2i(0, 1), E)
 	_check(b.place(Vector2i(1, 1), N | E | S | W).size() == 5, "plus molecule clears")
 
+	# Central block: atoms cluster around the middle of the board.
+	for topo in [Topology.square(), Topology.hex()]:
+		var cb := Board.new(10, 10, topo as Topology)
+		var cr := RandomNumberGenerator.new()
+		cr.seed = 3
+		cb.preplace(30, cr, true)
+		var total := 0
+		var far := 0
+		var middle: Vector2 = topo.board_pixel_size(10, 10, 1.0) / 2.0
+		var radius := 0.0
+		for y in 10:
+			for x in 10:
+				if cb.get_atom(Vector2i(x, y)) != 0:
+					total += 1
+					radius = maxf(radius, topo.cell_center(Vector2i(x, y), 1.0).distance_to(middle))
+		_check(total >= 26, "central block places nearly all 30 atoms (%d, %s)" % [total, topo.id])
+		_check(radius < 4.2, "central block stays near the middle (radius %.1f, %s)" % [radius, topo.id])
+		var rim := 0
+		for i in 10:
+			for edge in [Vector2i(i, 0), Vector2i(i, 9), Vector2i(0, i), Vector2i(9, i)]:
+				if cb.get_atom(edge) != 0:
+					rim += 1
+		_check(rim == 0, "central block leaves the board edge empty (%s)" % topo.id)
+
 	_finish()

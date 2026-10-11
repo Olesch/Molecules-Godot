@@ -98,7 +98,8 @@ func start(seed_value: int) -> void:
 	if _card_overlay:
 		_card_overlay.board_size = board_pixel_size()
 	_apply_rules_to_board()
-	board.preplace(mods.preplaced_count(config.get_int("preplaced")), _queue_rng)
+	var block := config.get_value("preplaced_layout") == "block"
+	board.preplace(mods.preplaced_count(config.get_int("block_atoms" if block else "preplaced")), _queue_rng, block)
 	_apply_danger_config()
 	_danger.ghosts.clear()
 	_danger.timed = timed

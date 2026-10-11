@@ -69,6 +69,15 @@ const OPTIONS: Array[Dictionary] = [
 		],
 	},
 	{
+		"id": "preplaced_layout",
+		"label": "Starting layout",
+		"default": "scatter",
+		"choices": [
+			{"value": "scatter", "label": "Scattered", "help": "Preplaced atoms are spread over the board."},
+			{"value": "block", "label": "Central block", "help": "A big block of atoms fills the middle of the board and has to be cleaned up."},
+		],
+	},
+	{
 		"id": "preview",
 		"label": "Preview atoms",
 		"default": "1",
@@ -159,6 +168,20 @@ const OPTIONS: Array[Dictionary] = [
 			{"value": "1", "label": "Normal", "help": "The usual odds of 4+ connection atoms."},
 			{"value": "2", "label": "Common", "help": "Twice as many 4+ connection atoms."},
 			{"value": "4", "label": "Frequent", "help": "Four times as many 4+ connection atoms."},
+		],
+	},
+	{
+		"id": "block_atoms",
+		"label": "Central block size",
+		"advanced": true,
+		"group": "Atoms",
+		"help": "Atoms in the starting block (only used with the Central block layout).",
+		"default": "20",
+		"choices": [
+			{"value": "12", "label": "12", "help": "A small block of 12 atoms."},
+			{"value": "20", "label": "20", "help": "A block of 20 atoms."},
+			{"value": "30", "label": "30", "help": "A big block of 30 atoms."},
+			{"value": "40", "label": "40", "help": "A huge block of 40 atoms (fills most of a small board)."},
 		],
 	},
 	{

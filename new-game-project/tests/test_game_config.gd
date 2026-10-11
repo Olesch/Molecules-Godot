@@ -56,7 +56,7 @@ func _options_schema() -> void:
 		_check(not ids.has(option.id), "option id '%s' is unique" % option.id)
 		ids[option.id] = true
 		var all_help := true
-		var numeric: bool = option.id not in ["pressure", "board"]
+		var numeric: bool = option.id not in ["pressure", "board", "preplaced_layout"]
 		for choice in option.choices:
 			if String(choice.get("help", option.get("help", ""))) == "":
 				all_help = false

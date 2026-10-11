@@ -237,8 +237,9 @@ func remove_atom(p: Vector2i) -> int:
 
 ## Scatters up to count random atoms with random rotation, skipping any that would
 ## complete a molecule (those would never clear, since nothing can attach to them).
-func preplace(count: int, rng: RandomNumberGenerator) -> void:
-	_scatter(count, rng, true)
+## With central true the atoms form a block around the middle of the board instead.
+func preplace(count: int, rng: RandomNumberGenerator, central := false) -> void:
+	_scatter(count, rng, true, central)
 
 
 ## Drops stray atoms (no specials) onto random empty cells. Returns the cells used,
@@ -247,17 +248,36 @@ func add_garbage(count: int, rng: RandomNumberGenerator) -> Array[Vector2i]:
 	return _scatter(count, rng, false)
 
 
-func _scatter(count: int, rng: RandomNumberGenerator, allow_specials: bool) -> Array[Vector2i]:
+func _scatter(count: int, rng: RandomNumberGenerator, allow_specials: bool, central := false) -> Array[Vector2i]:
 	var placed: Array[Vector2i] = []
+	var reserved := {}
+	if central:
+		reserved = _outside_centre(count)
 	for n in count:
 		var atom := Atoms.random_atom(rng, bomb_chance, wild_chance, shape_weights, min_bomb_connections, topology) if allow_specials else Atoms.random_shape(rng, shape_weights, topology)
 		# Never complete a molecule: nothing could attach to it, so it would just vanish.
-		var spot := stray_spot(rng, atom, true, Vector2i(-1, -1), {}, true)
+		var spot := stray_spot(rng, atom, true, Vector2i(-1, -1), reserved, true)
 		if spot.is_empty():
 			break
 		_cells[spot.cell.y * width + spot.cell.x] = spot.mask
 		placed.append(spot.cell)
 	return placed
+
+
+## Every cell except the ones closest to the middle of the board (only a little more than count
+## of them stay free, so the placement rules still have some choice).
+func _outside_centre(count: int) -> Dictionary:
+	var middle := topology.board_pixel_size(width, height, 1.0) / 2.0
+	var cells: Array[Vector2i] = []
+	for y in height:
+		for x in width:
+			cells.append(Vector2i(x, y))
+	cells.sort_custom(func(a, b): return topology.cell_center(a, 1.0).distance_squared_to(middle) < topology.cell_center(b, 1.0).distance_squared_to(middle))
+	var keep := mini(cells.size(), ceili(count * 1.1) + 1)
+	var outside := {}
+	for i in range(keep, cells.size()):
+		outside[cells[i]] = true
+	return outside
 
 
 ## Where a loose atom of this shape should go. Every free cell and rotation is scored and the
