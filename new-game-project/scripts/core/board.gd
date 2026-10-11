@@ -261,9 +261,11 @@ func _scatter(count: int, rng: RandomNumberGenerator, allow_specials: bool) -> A
 
 
 ## Where a loose atom of this shape should go. Every free cell and rotation is scored and the
-## best one picked (ties at random). In order of importance an atom should not
-## 1) point at the board border, 2) point at a molecule that can no longer be finished,
-## 3) point at a molecule that can still be finished, 4) anything goes.
+## best one picked (ties at random). In order of importance an arm should not point at
+## 1) the board border, 2) a closed side of a molecule that can no longer be finished,
+## 3) a closed side of a molecule that can still be finished, 4) an open side of a dead
+## molecule, 5) an open side of a live one, 6) anything goes.
+## A neighbour's side is open when it has a connection (or is a wildcard) facing the new atom.
 ## `reserved` cells and `avoid` are skipped, `rotate` false keeps the given orientation, and
 ## `skip_closing` rejects spots where the atom would complete a molecule.
 ## Returns {cell, mask}, or {} if nothing fits.
