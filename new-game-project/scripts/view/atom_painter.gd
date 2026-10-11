@@ -2,14 +2,8 @@ class_name AtomPainter
 extends RefCounted
 ## Draws one atom (stubs, body, wildcard sockets, bomb ring) on any CanvasItem.
 
-const COLORS: Array[Color] = [
-	Color("6ab04c"), # 1 connection
-	Color("4a90d9"), # 2
-	Color("e0a030"), # 3
-	Color("c0504d"), # 4
-	Color("3fb8af"), # 5 (hex)
-	Color("d96fa8"), # 6 (hex)
-]
+## Plain atoms are all blue whatever their connection count; bombs and wildcards stand out.
+const ATOM_COLOR := Color("4a90d9")
 const BOMB_COLOR := Color("2b2f38")
 
 
@@ -18,11 +12,7 @@ static func color(atom: int) -> Color:
 		return Palette.PURPLE
 	if Atoms.is_bomb(atom):
 		return BOMB_COLOR
-	var count := 0
-	for i in 6:
-		if atom & (1 << i):
-			count += 1
-	return COLORS[clampi(count, 1, COLORS.size()) - 1]
+	return ATOM_COLOR
 
 
 ## cell is the board cell used to tell open from bonded stubs; pass (-1,-1) or a null board
