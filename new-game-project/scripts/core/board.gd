@@ -249,21 +249,74 @@ func add_garbage(count: int, rng: RandomNumberGenerator) -> Array[Vector2i]:
 
 func _scatter(count: int, rng: RandomNumberGenerator, allow_specials: bool) -> Array[Vector2i]:
 	var placed: Array[Vector2i] = []
-	var tries := 0
-	while placed.size() < count and tries < count * 20 + 40:
-		tries += 1
-		var p := Vector2i(rng.randi_range(0, width - 1), rng.randi_range(0, height - 1))
-		if get_atom(p) != 0:
-			continue
+	for n in count:
 		var atom := Atoms.random_atom(rng, bomb_chance, wild_chance, shape_weights, min_bomb_connections, topology) if allow_specials else Atoms.random_shape(rng, shape_weights, topology)
-		for i in rng.randi_range(0, topology.dir_count - 1):
-			atom = topology.rotate_cw(atom)
-		_cells[p.y * width + p.x] = atom
-		if is_closed(molecule_at(p)):
-			_cells[p.y * width + p.x] = 0
-			continue
-		placed.append(p)
+		# Never complete a molecule: nothing could attach to it, so it would just vanish.
+		var spot := stray_spot(rng, atom, true, Vector2i(-1, -1), {}, true)
+		if spot.is_empty():
+			break
+		_cells[spot.cell.y * width + spot.cell.x] = spot.mask
+		placed.append(spot.cell)
 	return placed
+
+
+## Where a loose atom of this shape should go. Every free cell and rotation is scored and the
+## best one picked (ties at random). In order of importance an atom should not
+## 1) point at the board border, 2) point at a molecule that can no longer be finished,
+## 3) point at a molecule that can still be finished, 4) anything goes.
+## `reserved` cells and `avoid` are skipped, `rotate` false keeps the given orientation, and
+## `skip_closing` rejects spots where the atom would complete a molecule.
+## Returns {cell, mask}, or {} if nothing fits.
+func stray_spot(rng: RandomNumberGenerator, shape: int, rotate := true, avoid := Vector2i(-1, -1), reserved := {}, skip_closing := false) -> Dictionary:
+	var dead := {} # occupied cell -> true if its molecule can no longer be finished
+	for y in height:
+		for x in width:
+			var start := Vector2i(x, y)
+			if dead.has(start) or get_atom(start) == 0:
+				continue
+			var group := molecule_at(start)
+			var is_dead_group := is_dead(group)
+			for c in group:
+				dead[c] = is_dead_group
+	var rotations: Array[int] = []
+	var mask := shape
+	for i in (topology.dir_count if rotate else 1):
+		if not rotations.has(mask):
+			rotations.append(mask)
+		mask = topology.rotate_cw(mask)
+	var candidates: Array[Dictionary] = []
+	for y in height:
+		for x in width:
+			var p := Vector2i(x, y)
+			if p == avoid or get_atom(p) != 0 or reserved.has(p):
+				continue
+			for m in rotations:
+				var border := 0
+				var facing_dead := 0
+				var facing_live := 0
+				for dir in topology.dir_count:
+					if not (m & (1 << dir)):
+						continue
+					var n := topology.neighbor(p, dir)
+					if not in_bounds(n):
+						border += 1
+					elif get_atom(n) != 0:
+						if dead[n]:
+							facing_dead += 1
+						else:
+							facing_live += 1
+				candidates.append({"cell": p, "mask": m, "score": border * 1000000 + facing_dead * 1000 + facing_live, "r": rng.randf()})
+	candidates.sort_custom(func(a, b): return a.score < b.score or (a.score == b.score and a.r < b.r))
+	for cand in candidates:
+		if not skip_closing:
+			return cand
+		var p: Vector2i = cand.cell
+		_cells[p.y * width + p.x] = cand.mask
+		var closes := is_closed(molecule_at(p))
+		_cells[p.y * width + p.x] = 0
+		if not closes:
+			return cand
+	return {}
 
 
 ## Flat copy of the cells (row by row) for sending to the opponent.
