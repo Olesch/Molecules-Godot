@@ -7,7 +7,7 @@ var g: Node
 var role := "host"
 var board := "square" ## the board the host picks; the joiner must end up with the same
 ## Non-default options the host picks (main and advanced); the joiner must end up with the same on both playfields.
-var picks := {"board_size": "6", "incoming_seconds": "3", "attack_points": "25", "blast_radius": "2", "preplaced": "5", "preview": "3", "bombs": "0.6", "max_points": "8"}
+var picks := {"board_size": "6", "incoming_seconds": "8", "attack_points": "25", "blast_radius": "2", "preplaced": "5", "preview": "3", "bombs": "0.6", "max_points": "8"}
 var fails := 0
 var starts: Array = []  # [{seed, hash}] per game_start
 var t_start := 0.0
@@ -129,7 +129,7 @@ func _run(addr: String) -> void:
 	else:
 		ok = await wait_until(func(): return g._local._pending > 0, 4.0)
 		check("attack received (_pending>0)", ok, "pending=%d" % g._local._pending)
-		check("incoming gap is the host's 3 s", not g._local._incoming.ghosts.is_empty() and g._local._incoming.countdown <= 3.0 + 0.01, "countdown=%s" % str(g._local._incoming.countdown))
+		check("incoming gap is the host's 8 s", not g._local._incoming.ghosts.is_empty() and g._local._incoming.countdown <= 8.0 + 0.01 and g._local._incoming.countdown > 3.5, "countdown=%s" % str(g._local._incoming.countdown))
 	await wait(1.0)
 	# bots play
 	var moves := 0

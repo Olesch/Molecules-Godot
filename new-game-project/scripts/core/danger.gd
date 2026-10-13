@@ -21,7 +21,7 @@ const SECONDS_PER_STEP := 1.5 ## the gap shrinks by this much every LEVELS_PER_S
 const FIRST_GRACE_SECONDS := 6.0
 
 ## Versus: seconds between incoming stray atoms with no cards (Modifiers.incoming_gap_seconds adjusts it).
-const INCOMING_BASE_SECONDS := 5.0
+const INCOMING_BASE_SECONDS := 3.0
 
 var timed := false ## true: countdown is in seconds and advance() runs it; false: placements and tick()
 var countdown := 0.0 ## placements (turn-based) or seconds (timed) left until the ghosts drop

@@ -265,7 +265,7 @@ const OPTIONS: Array[Dictionary] = [
 		"group": "Versus",
 		"modes": ["versus"],
 		"help": "Versus: gap between incoming stray atoms landing.",
-		"default": "5",
+		"default": "3",
 		"choices": [
 			{"value": "3", "label": "3 s", "help": "Incoming stray atoms land 3 seconds apart."},
 			{"value": "5", "label": "5 s", "help": "Incoming stray atoms land 5 seconds apart."},
