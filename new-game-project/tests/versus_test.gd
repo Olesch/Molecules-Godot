@@ -7,7 +7,7 @@ var g: Node
 var role := "host"
 var board := "square" ## the board the host picks; the joiner must end up with the same
 ## Non-default options the host picks (main and advanced); the joiner must end up with the same on both playfields.
-var picks := {"board_size": "6", "incoming_seconds": "3", "attack_points": "15", "blast_radius": "2", "preplaced": "5", "preview": "3", "bombs": "0.6", "max_points": "8"}
+var picks := {"board_size": "6", "incoming_seconds": "3", "attack_points": "25", "blast_radius": "2", "preplaced": "5", "preview": "3", "bombs": "0.6", "max_points": "8"}
 var fails := 0
 var starts: Array = []  # [{seed, hash}] per game_start
 var t_start := 0.0

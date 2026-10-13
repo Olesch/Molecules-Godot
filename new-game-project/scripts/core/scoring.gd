@@ -23,4 +23,4 @@ static func points(molecule_size: int, max_atom_points := MAX_ATOM_POINTS) -> in
 
 ## In versus, every this many points scored send one stray atom to the opponent (default;
 ## the game options can change it).
-const POINTS_PER_ATTACK := 25
+const POINTS_PER_ATTACK := 15

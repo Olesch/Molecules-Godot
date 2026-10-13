@@ -250,7 +250,7 @@ const OPTIONS: Array[Dictionary] = [
 		"group": "Versus",
 		"modes": ["versus"],
 		"help": "Versus: points you must score to send one stray atom.",
-		"default": "25",
+		"default": "15",
 		"choices": [
 			{"value": "15", "label": "15", "help": "Every 15 points scored send one stray atom to the opponent."},
 			{"value": "25", "label": "25", "help": "Every 25 points scored send one stray atom to the opponent."},

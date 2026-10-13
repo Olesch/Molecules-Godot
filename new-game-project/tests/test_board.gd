@@ -171,7 +171,7 @@ func _init() -> void:
 		summed += Scoring.atom_points(i)
 	_check(summed == Scoring.points(8), "points(n) is the sum of its atoms' points")
 	_check(Scoring.points(0) == 0 and Scoring.points(-3) == 0, "no molecule, no points")
-	_check(Scoring.POINTS_PER_ATTACK == 25, "25 points per attack")
+	_check(Scoring.POINTS_PER_ATTACK == 15, "15 points per attack")
 
 	# Garbage and snapshots.
 	var grng := RandomNumberGenerator.new()
