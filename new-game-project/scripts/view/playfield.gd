@@ -1,7 +1,8 @@
 class_name Playfield
 extends Node2D
 ## One player's board: rules (via Board), drawing, effects and, if interactive, input.
-## The node's origin is the board's top-left corner; the header (held atom, queue) is drawn above it.
+## The node's origin is the board's top-left corner; the header (score, level) is drawn above it and
+## the side panel (held atom, queue, Reroll / Scrap, stash) to its left.
 ## A non-interactive Playfield is a mirror of the opponent and only shows snapshots.
 
 signal attack(amount: int) ## stray atoms this player sends to the opponent
@@ -19,9 +20,18 @@ const LIFELINE_FILL := 0.78
 const LIFELINE_COOLDOWN := 4
 const CLEAR_STEP := 0.07 ## seconds between neighbouring atoms of a clearing molecule
 const CLEAR_MAX_TIME := 0.7 ## the whole wave never takes longer than this
-const REROLL_RADIUS := 22.0 ## the round Reroll button next to the held atom
-const REROLL_SLOT := 62.0 ## header width it takes, pushing the coming-up queue to the right
-const SCRAP_RADIUS := 22.0 ## the round Scrap button (same size and slot as Reroll, to its right)
+const REROLL_RADIUS := 22.0 ## the round Reroll button under the held atom
+const REROLL_SLOT := 72.0 ## distance between the centres of the two round buttons
+const SCRAP_RADIUS := 22.0 ## the round Scrap button (same size as Reroll, to its right)
+const PANEL_W := 150.0 ## side panel left of the board: NOW, buttons, stash, COMING UP
+const PANEL_GAP := 24.0 ## space between the panel and the board (the incoming stray blocks sit in it)
+const PANEL_SPACE := PANEL_W + PANEL_GAP ## what the owner of the layout reserves left of the board
+const HELD_UNIT := 120 ## the held atom is drawn at this unit size (a normal cell is 72)
+const PANEL_HELD_Y := 100.0 ## centre of the held atom, below the NOW label
+const PANEL_BUTTON_Y := 206.0 ## centre of the round buttons
+const QUEUE_ROW_MAX := 54.0 ## spacing of the coming-up atoms (shrinks to fit many of them)
+const QUEUE_ROW_MIN := 26.0
+const PANEL_BOTTOM := 600.0 ## the coming-up column may reach this far down, even past a short board
 const PERMANENT_DEAD_ALPHA := 0.22 ## background of a molecule that can never be finished
 const FIXABLE_DEAD_ALPHA := 0.10 ## background of a molecule blocked only by atoms of other molecules
 const WARN_SECONDS := 3.0 ## timed mode: the warning sound and red countdown start this far ahead
@@ -847,19 +857,7 @@ func _draw_danger_ghosts(font: Font, d: Danger, is_timed: bool) -> void:
 
 
 func _draw_header(font: Font, board_px: Vector2) -> void:
-	draw_string(font, Vector2(0, -HEADER + 28), "NOW", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Palette.DIM)
-	_draw_atom(Vector2(40, -HEADER + 78), _queue[0], 1.0, Vector2i(-1, -1), 1.0, 72)
-	var queue_x := 150.0
-	if mods.has(Cards.REROLL):
-		queue_x += REROLL_SLOT
-		_draw_reroll_button(font)
-	if scrap_enabled():
-		queue_x += REROLL_SLOT
-		_draw_scrap_button(font)
-	draw_string(font, Vector2(queue_x - 30.0, -HEADER + 28), "COMING UP", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Palette.DIM)
-	var spacing := minf(62.0, (board_px.x - 14.0 - queue_x) / maxf(1.0, _queue.size() - 2.0))
-	for i in range(1, _queue.size()):
-		_draw_atom(Vector2(queue_x + (i - 1) * spacing, -HEADER + 83), _queue[i], 0.85, Vector2i(-1, -1), 0.6, 72)
+	_draw_panel(font, board_px)
 	draw_string(font, Vector2(0, -HEADER + 40), "SCORE: %d" % score, HORIZONTAL_ALIGNMENT_RIGHT, board_px.x, 22, Palette.TEXT)
 	var need := Progression.xp_needed(progression.level, config.get_float("xp_scale"))
 	draw_string(font, Vector2(board_px.x - 207, -HEADER + 57), "LV %d" % progression.level, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Palette.DIM)
@@ -881,8 +879,74 @@ func _draw_header(font: Font, board_px: Vector2) -> void:
 	_draw_card_rows(font, board_px)
 
 
+## Left edge of the side panel and the x of its middle, in board coordinates.
+func _panel_center_x() -> float:
+	return -PANEL_SPACE + PANEL_W / 2.0
+
+
+## The side panel: NOW with the big held atom, the round buttons, the stash / swap hints and
+## below them the COMING UP column (shrinks to fit up to 8 queue entries).
+func _draw_panel(font: Font, board_px: Vector2) -> void:
+	var cx := _panel_center_x()
+	var left := -PANEL_SPACE
+	draw_string(font, Vector2(left, 18.0), "NOW", HORIZONTAL_ALIGNMENT_CENTER, PANEL_W, 16, Palette.DIM)
+	_draw_atom(Vector2(cx, PANEL_HELD_Y), _queue[0], 1.0, Vector2i(-1, -1), 1.0, HELD_UNIT)
+	var y := _panel_rows_top()
+	if mods.has(Cards.REROLL):
+		_draw_reroll_button(font)
+	if scrap_enabled():
+		_draw_scrap_button(font)
+	if mods.has(Cards.STASH):
+		var text := "[H] Stash:"
+		var text_w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+		var slot_w := 40.0 if _stash == 0 else 30.0
+		var x := cx - (text_w + 6.0 + slot_w) / 2.0
+		draw_string(font, Vector2(x, y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Palette.DIM)
+		x += text_w + 6.0
+		if _stash == 0:
+			draw_string(font, Vector2(x, y), "empty", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Palette.DIM)
+		else:
+			_draw_atom(Vector2(x + 14.0, y - 5.0), _stash, 1.0, Vector2i(-1, -1), 0.4, 72)
+		y += 24.0
+	if mods.has(Cards.TWO_HAND):
+		draw_string(font, Vector2(left, y), "[Tab] Swap next", HORIZONTAL_ALIGNMENT_CENTER, PANEL_W, 14, Palette.TEXT)
+		y += 24.0
+	if _queue.size() < 2:
+		return
+	draw_string(font, Vector2(left, _queue_label_y()), "COMING UP", HORIZONTAL_ALIGNMENT_CENTER, PANEL_W, 16, Palette.DIM)
+	var top := _queue_top()
+	var count := _queue.size() - 1
+	var spacing := clampf((maxf(board_px.y, PANEL_BOTTOM) - top - 20.0) / maxf(1.0, count - 1.0), QUEUE_ROW_MIN, QUEUE_ROW_MAX)
+	var shrink := minf(1.0, spacing / QUEUE_ROW_MAX)
+	for i in range(1, _queue.size()):
+		_draw_atom(Vector2(cx, top + (i - 1) * spacing), _queue[i], 0.85, Vector2i(-1, -1), 0.6 * shrink, 72)
+
+
+## Baseline of the first panel row under the held atom and the buttons (stash, swap hint, COMING UP).
+func _panel_rows_top() -> float:
+	if mods.has(Cards.REROLL) or scrap_enabled():
+		return PANEL_BUTTON_Y + SCRAP_RADIUS + 44.0
+	return PANEL_HELD_Y + HELD_UNIT / 2.0 + 14.0
+
+
+## Baseline of the COMING UP label.
+func _queue_label_y() -> float:
+	var y := _panel_rows_top()
+	if mods.has(Cards.STASH):
+		y += 24.0
+	if mods.has(Cards.TWO_HAND):
+		y += 24.0
+	return y + 8.0
+
+
+## Centre of the first coming-up atom.
+func _queue_top() -> float:
+	return _queue_label_y() + 26.0
+
+
 func _reroll_center() -> Vector2:
-	return Vector2(106.0, -HEADER + 78.0)
+	var dx := -REROLL_SLOT / 2.0 if scrap_enabled() else 0.0
+	return Vector2(_panel_center_x() + dx, PANEL_BUTTON_Y)
 
 
 ## True if a click at this viewport position lands on the Reroll button.
@@ -918,7 +982,8 @@ func _draw_reroll_button(font: Font) -> void:
 
 
 func _scrap_center() -> Vector2:
-	return _reroll_center() + Vector2(REROLL_SLOT if mods.has(Cards.REROLL) else 0.0, 0.0)
+	var dx := REROLL_SLOT / 2.0 if mods.has(Cards.REROLL) else 0.0
+	return Vector2(_panel_center_x() + dx, PANEL_BUTTON_Y)
 
 
 ## True if a click at this viewport position lands on the Scrap button.
@@ -963,28 +1028,11 @@ func _draw_arrow_head(center: Vector2, radius: float, angle: float, color: Color
 	draw_colored_polygon(PackedVector2Array([at + forward * 7.0, at + outward * 5.0, at - outward * 5.0]), color)
 
 
-## Under the board: key hints for active cards and a chip for every owned card.
+## Under the board: a chip for every owned card.
 func _draw_card_rows(font: Font, board_px: Vector2) -> void:
-	var y := board_px.y + 24.0
-	var x := 0.0
-	var hint_color := Palette.DIM
-	if mods.has(Cards.STASH):
-		var text := "[H] Stash:"
-		draw_string(font, Vector2(x, y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, hint_color)
-		x += font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x + 6.0
-		if _stash == 0:
-			draw_string(font, Vector2(x, y), "empty", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, hint_color)
-			x += 44.0
-		else:
-			_draw_atom(Vector2(x + 14.0, y - 5.0), _stash, 1.0, Vector2i(-1, -1), 0.4, 72)
-			x += 34.0
-		x += 14.0
-	if mods.has(Cards.TWO_HAND):
-		draw_string(font, Vector2(x, y), "[Tab] Swap next", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Palette.TEXT)
-
 	# Chips for the owned cards, coloured by rarity.
-	y += 24.0
-	x = 0.0
+	var y := board_px.y + 34.0
+	var x := 0.0
 	for id in mods.stacks.keys():
 		var def := Cards.get_def(id)
 		if def.is_empty() or int(mods.stacks[id]) <= 0:

@@ -106,16 +106,17 @@ func _layout() -> void:
 	if _local:
 		var board_w := _local.board_pixel_size().x
 		if _mode == Mode.VERSUS and _remote:
-			# Both boards as one group, centred, with a fixed gap between them.
-			var total := board_w + VERSUS_GAP + _remote.board_pixel_size().x
+			# Panel, local board and opponent board as one group, centred, with a fixed gap between the boards.
+			var total := Playfield.PANEL_SPACE + board_w + VERSUS_GAP + _remote.board_pixel_size().x
 			var left := maxf(MARGIN, (size.x - total) / 2.0)
-			_local.home_position = Vector2(left, Playfield.HEADER)
-			_remote.home_position = Vector2(left + board_w + VERSUS_GAP, Playfield.HEADER + 40)
+			_local.home_position = Vector2(left + Playfield.PANEL_SPACE, Playfield.HEADER)
+			_remote.home_position = Vector2(left + Playfield.PANEL_SPACE + board_w + VERSUS_GAP, Playfield.HEADER + 40)
 			_remote.position = _remote.home_position
 		elif _mode == Mode.VERSUS:
-			_local.home_position = Vector2(MARGIN, Playfield.HEADER)
+			_local.home_position = Vector2(MARGIN + Playfield.PANEL_SPACE, Playfield.HEADER)
 		else:
-			_local.home_position = Vector2((size.x - board_w) / 2.0, Playfield.HEADER)
+			# The side panel and the board are centred as one group.
+			_local.home_position = Vector2((size.x - board_w - Playfield.PANEL_SPACE) / 2.0 + Playfield.PANEL_SPACE, Playfield.HEADER)
 		_local.position = _local.home_position
 	queue_redraw()
 

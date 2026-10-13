@@ -42,7 +42,7 @@ func _run() -> void:
 	_check(pf._fx.topology == pf.topology and is_equal_approx(pf._fx.cell_size, pf.cell_size), "fx shares topology and cell size")
 	_check(pf._card_overlay.board_size.is_equal_approx(size), "card overlay follows the board size")
 	var home := pf.home_position
-	_check(is_equal_approx(home.x, (g.get_viewport_rect().size.x - size.x) / 2.0), "board is centred by its pixel width")
+	_check(is_equal_approx(home.x, (g.get_viewport_rect().size.x - size.x - Playfield.PANEL_SPACE) / 2.0 + Playfield.PANEL_SPACE), "side panel and board are centred together by pixel width")
 
 	# Rotation: wheel down is clockwise, wheel up is the exact opposite, on hex too.
 	var wheel := InputEventMouseButton.new()
