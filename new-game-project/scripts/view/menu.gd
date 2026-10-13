@@ -4,7 +4,7 @@ extends Control
 signal choose(mode: String, address: String)
 
 ## Shown in the menu and along the bottom of the game screen.
-const CONTROLS_HINT := "Click: place   R / right-click / wheel: rotate   M: music   Esc: menu   Cards: H stash, X reroll, Tab swap"
+const CONTROLS_HINT := "Click: place   R / right-click / wheel: rotate   M: music   Esc: menu   C: scrap an atom   Cards: H stash, X reroll, Tab swap"
 
 var _solo_btn: Button
 var _host_btn: Button

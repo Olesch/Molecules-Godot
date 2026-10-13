@@ -209,12 +209,43 @@ func blocked_end_count(group: Array[Vector2i]) -> int:
 	return blocked
 
 
+## Blocked ends split by whether anything could ever fix them: {permanent, fixable}.
+## permanent: the end faces the board border or an atom of the same molecule (nothing can change
+## that). fixable: it faces an atom of another molecule (clearing that atom would free it).
+func blocked_end_kinds(group: Array[Vector2i]) -> Dictionary:
+	var members := {}
+	for c in group:
+		members[c] = true
+	var permanent := 0
+	var fixable := 0
+	for c in group:
+		for dir in topology.dir_count:
+			if (get_atom(c) & (1 << dir)) and not is_bonded(c, dir):
+				var n := topology.neighbor(c, dir)
+				if not in_bounds(n) or members.has(n):
+					permanent += 1
+				elif get_atom(n) != 0:
+					fixable += 1
+	return {"permanent": permanent, "fixable": fixable}
+
+
 ## True when the group can no longer be finished: more blocked ends than it may leave open.
 func is_dead(group: Array[Vector2i]) -> bool:
 	if group.is_empty():
 		return false
-	var allowed := max_open_ends if group.size() >= LOOSE_MIN_SIZE else 0
-	return blocked_end_count(group) > allowed
+	return blocked_end_count(group) > _allowed_open(group)
+
+
+## True when the group is dead whatever happens to the other atoms: its permanently blocked
+## ends alone exceed what it may leave open.
+func is_permanently_dead(group: Array[Vector2i]) -> bool:
+	if group.is_empty():
+		return false
+	return int(blocked_end_kinds(group).permanent) > _allowed_open(group)
+
+
+func _allowed_open(group: Array[Vector2i]) -> int:
+	return max_open_ends if group.size() >= LOOSE_MIN_SIZE else 0
 
 
 func open_end_count(group: Array[Vector2i]) -> int:

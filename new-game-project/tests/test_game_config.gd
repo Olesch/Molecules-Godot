@@ -48,7 +48,7 @@ func _options_schema() -> void:
 	_check(d.get_int("max_points") == Scoring.MAX_ATOM_POINTS and d.get_int("attack_points") == Scoring.POINTS_PER_ATTACK and is_equal_approx(d.get_float("incoming_seconds"), Danger.INCOMING_BASE_SECONDS), "scoring and versus defaults are the old constants")
 	_check(d.get_int("turn_start") == Danger.BASE_INTERVAL and d.get_int("turn_min") == Danger.MIN_INTERVAL and d.get_int("turn_grace") == Danger.FIRST_GRACE, "turn-based pressure defaults")
 	_check(is_equal_approx(d.get_float("time_start"), Danger.BASE_SECONDS) and is_equal_approx(d.get_float("time_min"), Danger.MIN_SECONDS) and is_equal_approx(d.get_float("time_grace"), Danger.FIRST_GRACE_SECONDS) and d.get_int("double_level") == Danger.DOUBLE_ABOVE_LEVEL, "timed pressure defaults")
-	_check(d.get_int("reroll_cooldown") == Playfield.REROLL_COOLDOWN and d.get_float("xp_scale") == 1.0, "card and level defaults")
+	_check(d.get_int("reroll_cooldown") == Playfield.REROLL_COOLDOWN and d.get_float("xp_scale") == 0.5, "card and level defaults")
 
 	var ids := {}
 	var advanced := 0

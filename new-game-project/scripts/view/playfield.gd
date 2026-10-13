@@ -21,6 +21,9 @@ const CLEAR_STEP := 0.07 ## seconds between neighbouring atoms of a clearing mol
 const CLEAR_MAX_TIME := 0.7 ## the whole wave never takes longer than this
 const REROLL_RADIUS := 22.0 ## the round Reroll button next to the held atom
 const REROLL_SLOT := 62.0 ## header width it takes, pushing the coming-up queue to the right
+const SCRAP_RADIUS := 22.0 ## the round Scrap button (same size and slot as Reroll, to its right)
+const PERMANENT_DEAD_ALPHA := 0.22 ## background of a molecule that can never be finished
+const FIXABLE_DEAD_ALPHA := 0.10 ## background of a molecule blocked only by atoms of other molecules
 const WARN_SECONDS := 3.0 ## timed mode: the warning sound and red countdown start this far ahead
 
 const REFERENCE_COLS := 8 ## whatever the board size, the board is as wide as BOARD_W cells of base_cell_size
@@ -59,6 +62,9 @@ var _attack_charge := 0.0 ## versus: points not yet turned into stray atoms (the
 var _pending := 0## versus: queued incoming stray atoms (including the announced one)
 var _hover := Vector2i(-1, -1)
 var _reroll_hover := false
+var _scrap_hover := false
+var _scrap_armed := false ## the next click on an atom deletes it
+var _scrap_cd := 0 ## placements until Scrap is ready again
 var _card_overlay: CardOverlay
 var _stash := 0
 var _reroll_cd := 0
@@ -116,6 +122,8 @@ func start(seed_value: int) -> void:
 	_attack_charge = 0.0
 	_stash = 0
 	_reroll_cd = 0
+	_scrap_cd = 0
+	_set_scrap_armed(false)
 	_lifeline_cd = 0
 	_placements = 0
 	_since_clear = 99
@@ -193,6 +201,8 @@ func set_overlay(overlay_title: String, sub := "", color := Palette.TEXT) -> voi
 	_overlay_sub = sub
 	_overlay_color = color
 	finished = overlay_title != ""
+	if finished:
+		_set_scrap_armed(false)
 	queue_redraw()
 
 
@@ -310,6 +320,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		_hover = _cell_at(event.position)
 		_reroll_hover = _reroll_hit(event.position)
+		_scrap_hover = _scrap_hit(event.position)
 		queue_redraw()
 	elif event is InputEventMouseButton and event.pressed:
 		match event.button_index:
@@ -318,10 +329,20 @@ func _unhandled_input(event: InputEvent) -> void:
 					restart_requested.emit()
 				elif _reroll_hit(event.position):
 					reroll_held()
+				elif _scrap_hit(event.position):
+					toggle_scrap()
+				elif _scrap_armed:
+					_hover = _cell_at(event.position)
+					scrap_cell(_hover)
 				else:
 					_hover = _cell_at(event.position)
 					try_place(_hover)
-			MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_WHEEL_DOWN:
+			MOUSE_BUTTON_RIGHT:
+				if _scrap_armed:
+					_set_scrap_armed(false)
+				else:
+					rotate_held()
+			MOUSE_BUTTON_WHEEL_DOWN:
 				rotate_held()
 			MOUSE_BUTTON_WHEEL_UP:
 				rotate_held(false)
@@ -333,6 +354,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				stash_swap()
 			KEY_X:
 				reroll_held()
+			KEY_C:
+				toggle_scrap()
+			KEY_ESCAPE:
+				if _scrap_armed:
+					_set_scrap_armed(false)
+					get_viewport().set_input_as_handled() # cancels Scrap instead of leaving to the menu
 			KEY_TAB:
 				swap_next()
 				get_viewport().set_input_as_handled()
@@ -378,6 +405,65 @@ func reroll_held() -> void:
 	queue_redraw()
 
 
+## Scrap is a base ability unless the scrap_cooldown option is Off.
+func scrap_enabled() -> bool:
+	return config.get_int("scrap_cooldown") > 0
+
+
+func scrap_ready() -> bool:
+	return interactive and scrap_enabled() and _scrap_cd == 0 and not finished and not _offer_open()
+
+
+func is_scrap_armed() -> bool:
+	return _scrap_armed
+
+
+## Button / key C: arms Scrap (the next click on an atom deletes it) or cancels it.
+func toggle_scrap() -> void:
+	if _scrap_armed:
+		_set_scrap_armed(false)
+	elif scrap_ready():
+		_set_scrap_armed(true)
+		sfx_requested.emit("rotate", 0.7)
+	queue_redraw()
+
+
+func _set_scrap_armed(armed: bool) -> void:
+	if _scrap_armed == armed:
+		return
+	_scrap_armed = armed
+	if interactive and DisplayServer.get_name() != "headless":
+		Input.set_default_cursor_shape(Input.CURSOR_CROSS if armed else Input.CURSOR_ARROW)
+	queue_redraw()
+
+
+## Scrap: deletes the atom at p. No points, no clear check; it counts as a placement for the
+## turn-based pressure clock only. Returns false (and stays armed) for an empty cell or when
+## Scrap cannot be used right now.
+func scrap_cell(p: Vector2i) -> bool:
+	if not scrap_ready() or not board.in_bounds(p):
+		return false
+	if board.is_empty(p):
+		sfx_requested.emit("invalid", 1.0)
+		_fx.shake(0.12)
+		return false
+	var mask := board.remove_atom(p)
+	_stray.erase(p)
+	_set_scrap_armed(false)
+	_scrap_cd = config.get_int("scrap_cooldown")
+	var center := _cell_center(p)
+	_fx.burst(center, AtomPainter.color(mask), 16, 240.0)
+	_fx.burst(center, Palette.BAD, 6, 150.0)
+	_fx.ring(center, Palette.BAD, 0.4)
+	sfx_requested.emit("clear", 0.65)
+	_fx.shake(0.2)
+	if _danger_active() and not finished:
+		_danger_step(Vector2i(-1, -1))
+	board_changed.emit(board.snapshot())
+	queue_redraw()
+	return true
+
+
 ## Two-Hand card: swap the held atom with the next one.
 func swap_next() -> void:
 	if finished or _offer_open() or not mods.has(Cards.TWO_HAND) or _queue.size() < 2:
@@ -403,6 +489,7 @@ func try_place(p: Vector2i) -> void:
 	_since_clear += 1
 	_reroll_cd = maxi(0, _reroll_cd - 1)
 	_lifeline_cd = maxi(0, _lifeline_cd - 1)
+	_scrap_cd = maxi(0, _scrap_cd - 1)
 	if cleared.is_empty():
 		_fx.pop(p)
 		sfx_requested.emit("place", 1.0)
@@ -433,13 +520,14 @@ func _danger_active() -> bool:
 	return interactive and not versus and config.pressure() != GameConfig.PRESSURE_NONE
 
 
-## One placement passed: move a ghost you built over, then drop what is due.
+## One placement (or Scrap) passed: move a ghost you built over, then drop what is due.
 func _danger_step(placed: Vector2i) -> void:
-	var from := _cell_center(placed)
-	var moved := _danger.relocate_at(placed, board, _fx_rng)
-	if moved.x >= 0:
-		_fx.spark(from, _cell_center(moved), Palette.ORANGE, 0.3)
-		_fx.ring(from, Palette.ORANGE, 0.35)
+	if placed.x >= 0: # Scrap passes (-1, -1): nothing was built over a ghost
+		var from := _cell_center(placed)
+		var moved := _danger.relocate_at(placed, board, _fx_rng)
+		if moved.x >= 0:
+			_fx.spark(from, _cell_center(moved), Palette.ORANGE, 0.3)
+			_fx.ring(from, Palette.ORANGE, 0.35)
 	if timed:
 		return # the clock decides when they drop
 	var drops := _danger.tick(board, _fx_rng)
@@ -635,7 +723,9 @@ func _draw() -> void:
 	var font := ThemeDB.fallback_font
 	var board_px := board_pixel_size()
 
-	# Molecules that can never be finished (an end is blocked) get a subtle red background.
+	# Molecules that can never be finished get a red background: strong when nothing could ever
+	# fix them (an end faces the border or their own atoms), subtle when only atoms of other
+	# molecules block them (clearing those revives it).
 	var seen := {}
 	for y in board_h:
 		for x in board_w:
@@ -646,11 +736,12 @@ func _draw() -> void:
 			for c in group:
 				seen[c] = true
 			if board.is_dead(group):
+				var alpha := PERMANENT_DEAD_ALPHA if board.is_permanently_dead(group) else FIXABLE_DEAD_ALPHA
 				for c in group:
-					draw_colored_polygon(_cell_poly(c), Color(Palette.BAD, 0.12))
+					draw_colored_polygon(_cell_poly(c), Color(Palette.BAD, alpha))
 
 	# Hovering an atom lights up its molecule: cells with an open connection red, fully bonded blue.
-	if interactive and not finished and board.in_bounds(_hover) and board.get_atom(_hover) != 0:
+	if interactive and not finished and not _scrap_armed and board.in_bounds(_hover) and board.get_atom(_hover) != 0:
 		for c in board.molecule_at(_hover):
 			var is_open := false
 			for dir in topology.dir_count:
@@ -668,8 +759,18 @@ func _draw() -> void:
 			if mask != 0:
 				_draw_atom(_cell_center(p), mask, 1.0, p, _fx.pop_scale(p))
 
+	# Scrap mode: the atom under the cursor is marked red.
+	if _scrap_armed and not finished and board.in_bounds(_hover) and board.get_atom(_hover) != 0:
+		var scrap_poly := _cell_poly(_hover)
+		draw_colored_polygon(scrap_poly, Color(Palette.BAD, 0.4))
+		_draw_closed(scrap_poly, Palette.BAD, 3.0)
+		var cc := _cell_center(_hover)
+		var arm := cell_size * 0.2
+		draw_line(cc + Vector2(-arm, -arm), cc + Vector2(arm, arm), Palette.BAD, 4.0)
+		draw_line(cc + Vector2(-arm, arm), cc + Vector2(arm, -arm), Palette.BAD, 4.0)
+
 	# Hover preview (a bomb also shows its blast area).
-	if interactive and not finished and board.is_empty(_hover):
+	if interactive and not finished and not _scrap_armed and board.is_empty(_hover):
 		if Atoms.is_bomb(_queue[0]):
 			for c in blast_preview_cells(_hover):
 				var poly := _cell_poly(c)
@@ -752,6 +853,9 @@ func _draw_header(font: Font, board_px: Vector2) -> void:
 	if mods.has(Cards.REROLL):
 		queue_x += REROLL_SLOT
 		_draw_reroll_button(font)
+	if scrap_enabled():
+		queue_x += REROLL_SLOT
+		_draw_scrap_button(font)
 	draw_string(font, Vector2(queue_x - 30.0, -HEADER + 28), "COMING UP", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Palette.DIM)
 	var spacing := minf(62.0, (board_px.x - 14.0 - queue_x) / maxf(1.0, _queue.size() - 2.0))
 	for i in range(1, _queue.size()):
@@ -772,6 +876,8 @@ func _draw_header(font: Font, board_px: Vector2) -> void:
 		var left := "%ds" % _danger.countdown_label() if timed else str(_danger.countdown_label())
 		var text := "STRAY IN %s" % left if count == 1 else "%d STRAYS IN %s" % [count, left]
 		draw_string(font, Vector2(0, -HEADER + 120), text, HORIZONTAL_ALIGNMENT_RIGHT, board_px.x, 18, Palette.BAD if _danger_urgent(_danger, timed) else Palette.ORANGE)
+	if _scrap_armed:
+		draw_string(font, Vector2(0, -HEADER + 126), "SCRAP: click an atom to delete it (Esc / right-click cancels)", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Palette.BAD)
 	_draw_card_rows(font, board_px)
 
 
@@ -809,6 +915,44 @@ func _draw_reroll_button(font: Font) -> void:
 	_draw_arrow_head(center, r, deg_to_rad(155.0), icon)
 	var caption := "X" if ready else "in %d" % _reroll_cd
 	draw_string(font, center + Vector2(-30.0, REROLL_RADIUS + 15.0), caption, HORIZONTAL_ALIGNMENT_CENTER, 60.0, 13, Palette.TEXT if ready else Palette.DIM)
+
+
+func _scrap_center() -> Vector2:
+	return _reroll_center() + Vector2(REROLL_SLOT if mods.has(Cards.REROLL) else 0.0, 0.0)
+
+
+## True if a click at this viewport position lands on the Scrap button.
+func _scrap_hit(viewport_pos: Vector2) -> bool:
+	if not scrap_enabled() or not interactive:
+		return false
+	var local := viewport_pos - get_parent_global_offset() - home_position
+	return local.distance_to(_scrap_center()) <= SCRAP_RADIUS + 4.0
+
+
+## The Scrap ability as a round button: a bin icon and a ring that fills while it recharges.
+## Clicking it (or pressing C) arms Scrap; the next click on an atom deletes it.
+func _draw_scrap_button(font: Font) -> void:
+	var center := _scrap_center()
+	var ready := _scrap_cd == 0
+	var accent := Palette.BAD if ready else Palette.DIM
+	var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 260.0)
+	if _scrap_armed:
+		draw_circle(center, SCRAP_RADIUS + 5.0, Color(Palette.BAD, 0.35))
+	elif ready:
+		draw_circle(center, SCRAP_RADIUS + 3.0 + 2.0 * pulse, Color(accent, 0.08 + 0.08 * pulse))
+	draw_circle(center, SCRAP_RADIUS, Palette.PANEL.lightened(0.12) if _scrap_hover and ready else Palette.PANEL)
+	draw_arc(center, SCRAP_RADIUS, 0.0, TAU, 40, Color(accent, 0.45), 2.0)
+	if not ready:
+		var progress := 1.0 - float(_scrap_cd) / config.get_int("scrap_cooldown")
+		draw_arc(center, SCRAP_RADIUS, -PI / 2.0, -PI / 2.0 + TAU * progress, 40, Palette.BAD, 4.0)
+	var icon := (Palette.BAD if _scrap_armed else Palette.TEXT) if ready else Palette.DIM
+	draw_line(center + Vector2(-9.0, -6.0), center + Vector2(9.0, -6.0), icon, 3.0) # lid
+	draw_polyline(PackedVector2Array([center + Vector2(-3.0, -6.0), center + Vector2(-3.0, -10.0), center + Vector2(3.0, -10.0), center + Vector2(3.0, -6.0)]), icon, 2.0) # handle
+	draw_polyline(PackedVector2Array([center + Vector2(-7.0, -3.0), center + Vector2(-5.5, 9.0), center + Vector2(5.5, 9.0), center + Vector2(7.0, -3.0)]), icon, 2.5) # body
+	draw_line(center + Vector2(-2.0, 0.0), center + Vector2(-2.0, 6.0), icon, 1.5)
+	draw_line(center + Vector2(2.0, 0.0), center + Vector2(2.0, 6.0), icon, 1.5)
+	var caption := "Esc" if _scrap_armed else ("C" if ready else "in %d" % _scrap_cd)
+	draw_string(font, center + Vector2(-30.0, SCRAP_RADIUS + 15.0), caption, HORIZONTAL_ALIGNMENT_CENTER, 60.0, 13, Palette.TEXT if ready else Palette.DIM)
 
 
 ## A small triangle at the end of a circular arc, pointing the way the arc runs (clockwise).
