@@ -156,7 +156,19 @@ func play_solo(seed_value: int) -> Dictionary:
 	var strays := 0
 	var lost := false
 	var first_clear := -1
+	var scrap_gain: Array = [] # permanent-dead atoms before - after each scrap
+	var scrap_at: Array = [] # placement count at each scrap
 	while not gm.finished and gm.placements < cap:
+		if bot_kind >= 2 and gm.scrap_ready():
+			var before: int = gm.geom.classify(gm.board)[0]
+			var sinfo: Dictionary = bot.scrap_if_useful()
+			if not sinfo.is_empty():
+				scrap_gain.append(before - int(gm.geom.classify(gm.board)[0]))
+				scrap_at.append(gm.placements)
+				if not gm.finished and pressure == "timed":
+					gm.advance_time(sec_per_place)
+				lost = gm.finished
+				continue
 		var cells: PackedInt32Array = gm.board.snapshot()
 		var f: float = gm.board.fill_ratio()
 		var used := 0
@@ -191,8 +203,6 @@ func play_solo(seed_value: int) -> Dictionary:
 						if Atoms.is_bomb(q):
 							bomb_in = true
 					hopeless.append([gm.placements, int(round(f * 1000.0)), 1 if bomb_in else 0])
-		if bot_kind >= 2:
-			bot.scrap_if_useful()
 		var pick: Array = bot.choose()
 		var info: Dictionary = gm.place(pick[0], pick[1])
 		var mol_total := 0
@@ -220,7 +230,7 @@ func play_solo(seed_value: int) -> Dictionary:
 		"first_clear": first_clear, "fill": fill, "clr": clr, "bl": blasted, "good": good, "prod": prod, "dh": dh, "ns": ns,
 		"dperm": dperm, "dfix": dfix, "occ": occ, "hopeless": hopeless, "hp_checked": hp_checked,
 		"bombs": bombs_placed, "bexp": bombs_exploded, "bwipe": bomb_wiped, "rescues": rescues,
-		"lv_marks": gm.level_up_marks, "strays": gm.strays_dropped, "cards": gm.prog.mods.to_dict(),
+		"scraps": gm.scraps, "csz": gm.clear_sizes, "scrap_gain": scrap_gain, "scrap_at": scrap_at, "lv_marks": gm.level_up_marks, "strays": gm.strays_dropped, "cards": gm.prog.mods.to_dict(),
 	}
 
 
@@ -235,7 +245,7 @@ func play_match(seed_value: int) -> Dictionary:
 		gm.frng.seed = seed_value * 31 + k
 		gms.append(gm)
 		var b = Bots.new()
-		b.setup(gm, 4, seed_value + k * 1000, bw)
+		b.setup(gm, 5 if bot_kind == 5 else 4, seed_value + k * 1000, bw)
 		bots.append(b)
 	var jitter := RandomNumberGenerator.new()
 	jitter.seed = seed_value + 5
@@ -269,6 +279,8 @@ func play_match(seed_value: int) -> Dictionary:
 			var gm = gms[k]
 			if t >= next_act[k]:
 				next_act[k] = t + maxf(1.0, sec_per_place + jitter.randf_range(-1.0, 1.0))
+				if not bots[k].scrap_if_useful().is_empty():
+					continue
 				var pick: Array = bots[k].choose()
 				gm.place(pick[0], pick[1])
 				_flush_attacks(gms, k, t, sent, attack_log)
@@ -284,7 +296,7 @@ func play_match(seed_value: int) -> Dictionary:
 	end_t = t
 	return {
 		"seed": seed_value, "t": end_t, "winner": winner, "first": first_attacker, "first_t": first_attack_t,
-		"sent": sent, "attacks": attack_log, "n": [gms[0].placements, gms[1].placements], "score": [gms[0].score, gms[1].score],
+		"sent": sent, "attacks": attack_log, "n": [gms[0].placements, gms[1].placements], "scraps": [gms[0].scraps, gms[1].scraps], "csz": [gms[0].clear_sizes, gms[1].clear_sizes], "strays": [gms[0].strays_dropped, gms[1].strays_dropped], "score": [gms[0].score, gms[1].score],
 		"fill": [gms[0].board.fill_ratio(), gms[1].board.fill_ratio()], "level": [gms[0].prog.level, gms[1].prog.level],
 	}
 
@@ -305,6 +317,8 @@ func play_vsfree(seed_value: int) -> Dictionary:
 	bot.setup(gm, 4, seed_value, bw)
 	var log: Array = []
 	while not gm.finished and gm.placements < cap:
+		if not bot.scrap_if_useful().is_empty():
+			continue
 		var pick: Array = bot.choose()
 		gm.place(pick[0], pick[1])
 		if gm.attack_out > 0:

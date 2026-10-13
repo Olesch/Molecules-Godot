@@ -8,7 +8,7 @@ extends RefCounted
 ##   fair: "reroll"  window without a live-extending atom => redraw the new atom (fair_tries, fair_after streak)
 ##   relief: N       each clear delays the next stray by N placements (turn-based) / relief_sec seconds (timed)
 ##   dissolve: N     a permanently dead molecule dissolves after N placements
-##   scrap: K        player can delete one atom every K placements (Scrap action)
+##   scrap: K        overrides the real scrap_cooldown option (Scrap is a base ability, default from GameConfig; 0 = off)
 ##   lps, step_size, sec_step   pressure curve (levels per step, placements and seconds per step)
 ##   stray_crowded: float       crowded-shape multiplier for strays only
 ##   xp_a, xp_b                 XP needed = (xp_a + xp_b * level) * xp_scale
@@ -40,6 +40,8 @@ var stash := 0
 var reroll_cd := 0
 var lifeline_cd := 0
 var scrap_cd := 0
+var clear_sizes: Array[int] = [] ## molecule size of every clear
+var scraps := 0 ## Scrap uses so far
 var placements := 0
 var since_clear := 99
 var score := 0
@@ -200,15 +202,34 @@ func swap_next() -> void:
 	queue[1] = held
 
 
+## Scrap cooldown in placements: the proto flag overrides the real option (scrap_cooldown, 0 = off).
+func scrap_cooldown() -> int:
+	if proto.has("scrap"):
+		return int(proto.scrap)
+	return cfg.get_int("scrap_cooldown")
+
+
 func scrap_ready() -> bool:
-	return int(proto.get("scrap", 0)) > 0 and scrap_cd <= 0 and not finished
+	return scrap_cooldown() > 0 and scrap_cd <= 0 and not finished
 
 
-func scrap(p: Vector2i) -> void:
+## Port of Playfield.scrap_cell: deletes the atom at p, no points; in turn-based solo it costs one
+## pressure tick (no ghost relocation). Returns the info dictionary, or {} if nothing happened.
+func scrap(p: Vector2i) -> Dictionary:
 	if not scrap_ready() or board.get_atom(p) == 0:
-		return
+		return {}
+	var info := _new_info()
 	board.remove_atom(p)
-	scrap_cd = int(proto.get("scrap", 0))
+	strays.erase(p)
+	scrap_cd = scrap_cooldown()
+	scraps += 1
+	if danger_active() and not finished and not timed:
+		var drops := danger.tick(board, frng)
+		if not drops.is_empty():
+			_drop_strays(drops, info)
+			if not finished:
+				danger.schedule_next(board, prog.level, frng)
+	return info
 
 
 func receive_attack(amount: int) -> void:
@@ -368,6 +389,7 @@ func _celebrate(cleared: Array[Vector2i], info: Dictionary) -> void:
 	var combo := since_clear <= 3
 	var points := mods.scaled_points(molecule, blasted, combo, cfg.get_int("max_points"))
 	score += points
+	clear_sizes.append(molecule)
 	info.mols.append(molecule)
 	info.blasted += blasted
 	info.points += points

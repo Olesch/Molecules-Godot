@@ -4,6 +4,8 @@ extends RefCounted
 ##   kind 2: greedy 1-ply (close a molecule > bond safely > avoid dead ends/border > random)
 ##   kind 3: beam search over held + preview atoms (all rotations) with a local-evaluation heuristic
 ##   kind 4: human-like = kind 3 with noise (suboptimal picks) and limited attention (radius around the last move)
+##   kind 5: size-seeking human-like = kind 4 that values big molecules (higher per-atom clear value, penalty for
+##           closing molecules smaller than small_min while the board is not crowded)
 
 const Geom = preload("res://tests/sim/geom.gd")
 
@@ -14,6 +16,8 @@ const W_POCKET := 1.5
 var clear_base := 25.0
 var clear_mol := 6.0
 var kind := 3
+var small_min := 0 ## closing a molecule smaller than this costs small_pen (kind 5 default 5)
+var small_pen := 0.0
 var rng := RandomNumberGenerator.new()
 var noise := 0.15 ## chance to pick a suboptimal move (kind 4)
 var focus_chance := 0.5 ## chance to only look near the last placement (kind 4)
@@ -39,6 +43,10 @@ func setup(game_ref, kind_id: int, seed_value: int, w: Dictionary = {}) -> void:
 	clear_mol = float(w.get("mol", clear_mol))
 	if w.has("b0"):
 		beams = [int(w.b0), int(w.get("b1", 4)), int(w.get("b2", 3))]
+	if kind == 5:
+		clear_mol = float(w.get("mol", 12.0))
+		small_min = int(w.get("small_min", 5))
+		small_pen = float(w.get("small_pen", 30.0))
 	scratch = Board.new(g.W, g.H, g.topo)
 
 
@@ -114,6 +122,7 @@ func _candidates(cells: PackedInt32Array, atom: int, limit: int, allowed: Packed
 	var rots := g.rotations(atom)
 	var wild := Atoms.is_wild(atom)
 	var max_open: int = game.board.max_open_ends
+	var fill_now: float = game.board.fill_ratio()
 	var out: Array = []
 	var restricted := allowed.size() > 0
 	for i in g.N:
@@ -163,7 +172,7 @@ func _choose_search() -> Array:
 	var atoms: Array = game.queue
 	var depth := mini(atoms.size(), max_depth)
 	var allowed := PackedByteArray()
-	if kind == 4 and game.last_cell.x >= 0 and rng.randf() < focus_chance:
+	if kind >= 4 and game.last_cell.x >= 0 and rng.randf() < focus_chance:
 		allowed.resize(g.N)
 		var any := false
 		for i in g.N:
@@ -178,7 +187,7 @@ func _choose_search() -> Array:
 		scored.append([c[0] + _rollout(_after(cells, c), atoms, 1, depth), c[1], c[2]])
 	scored.sort_custom(func(a, b): return a[0] > b[0])
 	var pick: Array = scored[0]
-	if kind == 4 and scored.size() > 1 and rng.randf() < noise:
+	if kind >= 4 and scored.size() > 1 and rng.randf() < noise:
 		pick = scored[rng.randi_range(1, mini(scored.size() - 1, 3))]
 	return [g.cell_of(pick[1]), pick[2]]
 
@@ -214,34 +223,88 @@ func _use_actives() -> void:
 		game.reroll_held()
 
 
-## Scrap prototype: delete the atom that causes the most dead ends in a permanently dead molecule.
-func scrap_if_useful() -> void:
-	if not game.scrap_ready():
-		return
+## Scrap (real base ability). Returns the scrap info dictionary, or {} if the bot did not scrap.
+##   random: never. greedy: ready + fill > 50% + a permanently dead molecule exists.
+##   search / human-like: ready and a permanently dead molecule exists (scrap the atom that leaves the fewest
+##   permanently dead atoms, ties by the dead-end heuristic), or no safe move for the held atom (scrap the atom
+##   that creates the most safe moves).
+func scrap_if_useful() -> Dictionary:
+	if kind == 1 or not game.scrap_ready():
+		return {}
+	_sync_scratch()
 	var cl := g.classify(game.board)
 	var groups: Array = cl[3]
-	if groups.is_empty():
-		return
 	var cells: PackedInt32Array = game.board.snapshot()
+	var fill: float = game.board.fill_ratio()
+	if kind == 2:
+		if groups.is_empty() or fill <= 0.5:
+			return {}
+		var pick := _scrap_heuristic(cells, groups)
+		return game.scrap(g.cell_of(pick)) if pick >= 0 else {}
+	var best := -1
+	var best_v := -1.0e9
+	if not groups.is_empty():
+		for grp in groups:
+			for i in grp:
+				scratch.load_snapshot(cells)
+				scratch.remove_atom(g.cell_of(i))
+				var after: Array = g.classify(scratch)
+				var v := -float(after[0]) - 0.3 * float(after[1]) + 0.01 * _atom_heur(cells, i)
+				if v > best_v:
+					best_v = v
+					best = i
+		if best >= 0:
+			return game.scrap(g.cell_of(best))
+	# No safe move for the held atom (late game): free the cell that creates the most.
+	if fill > 0.5:
+		var atom: int = game.queue[0]
+		var opt: Array = g.options(cells, atom)
+		if opt[0] == 0:
+			best = -1
+			best_v = -1.0e9
+			for i in g.N:
+				if cells[i] == 0:
+					continue
+				var c2 := cells.duplicate()
+				c2[i] = 0
+				var o2: Array = g.options(c2, atom)
+				if o2[0] == 0:
+					continue
+				scratch.load_snapshot(c2)
+				var after2: Array = g.classify(scratch)
+				var v2 := float(o2[0]) + 0.5 * float(o2[1]) - 0.2 * float(after2[0])
+				if v2 > best_v:
+					best_v = v2
+					best = i
+			if best >= 0:
+				return game.scrap(g.cell_of(best))
+	return {}
+
+
+func _atom_heur(cells: PackedInt32Array, i: int) -> int:
+	var v := 0
+	for d in g.D:
+		var n := g.nb[i * g.D + d]
+		if n < 0:
+			if cells[i] & (1 << d):
+				v += 2
+		elif cells[n] != 0 and (cells[n] & (1 << g.back[d])) == 0 and (cells[i] & (1 << d)):
+			v += 2
+		elif cells[n] != 0 and (cells[n] & (1 << g.back[d])) != 0 and (cells[i] & (1 << d)) == 0:
+			v += 1
+	return v
+
+
+func _scrap_heuristic(cells: PackedInt32Array, groups: Array) -> int:
 	var best := -1
 	var best_v := -1
 	for grp in groups:
 		for i in grp:
-			var v := 0
-			for d in g.D:
-				var n := g.nb[i * g.D + d]
-				if n < 0:
-					if cells[i] & (1 << d):
-						v += 2
-				elif cells[n] != 0 and (cells[n] & (1 << g.back[d])) == 0 and (cells[i] & (1 << d)):
-					v += 2
-				elif cells[n] != 0 and (cells[n] & (1 << g.back[d])) != 0 and (cells[i] & (1 << d)) == 0:
-					v += 1
+			var v := _atom_heur(cells, i)
 			if v > best_v:
 				best_v = v
 				best = i
-	if best >= 0:
-		game.scrap(g.cell_of(best))
+	return best
 
 
 ## Is there a clear within `depth` placements using the atoms that will really come? (hopeless-board test)
