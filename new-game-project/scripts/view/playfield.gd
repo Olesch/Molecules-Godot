@@ -28,7 +28,7 @@ const PANEL_GAP := 24.0 ## space between the panel and the board (the incoming s
 const PANEL_SPACE := PANEL_W + PANEL_GAP ## what the owner of the layout reserves left of the board
 const HELD_UNIT := 120 ## the held atom is drawn at this unit size (a normal cell is 72)
 const PANEL_HELD_Y := 100.0 ## centre of the held atom, below the NOW label
-const PANEL_BUTTON_Y := 206.0 ## centre of the round buttons
+const PANEL_BUTTON_Y := -46.0 ## centre of the round buttons, above the NOW label (left of the header)
 const QUEUE_ROW_MAX := 54.0 ## spacing of the coming-up atoms (shrinks to fit many of them)
 const QUEUE_ROW_MIN := 26.0
 const PANEL_BOTTOM := 600.0 ## the coming-up column may reach this far down, even past a short board
@@ -884,8 +884,8 @@ func _panel_center_x() -> float:
 	return -PANEL_SPACE + PANEL_W / 2.0
 
 
-## The side panel: NOW with the big held atom, the round buttons, the stash / swap hints and
-## below them the COMING UP column (shrinks to fit up to 8 queue entries).
+## The side panel: the round buttons on top, then NOW with the big held atom, the stash / swap
+## hints and below them the COMING UP column (shrinks to fit up to 8 queue entries).
 func _draw_panel(font: Font, board_px: Vector2) -> void:
 	var cx := _panel_center_x()
 	var left := -PANEL_SPACE
@@ -922,10 +922,8 @@ func _draw_panel(font: Font, board_px: Vector2) -> void:
 		_draw_atom(Vector2(cx, top + (i - 1) * spacing), _queue[i], 0.85, Vector2i(-1, -1), 0.6 * shrink, 72)
 
 
-## Baseline of the first panel row under the held atom and the buttons (stash, swap hint, COMING UP).
+## Baseline of the first panel row under the held atom (stash, swap hint, COMING UP).
 func _panel_rows_top() -> float:
-	if mods.has(Cards.REROLL) or scrap_enabled():
-		return PANEL_BUTTON_Y + SCRAP_RADIUS + 44.0
 	return PANEL_HELD_Y + HELD_UNIT / 2.0 + 14.0
 
 

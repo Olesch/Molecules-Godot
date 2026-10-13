@@ -17,7 +17,9 @@ func _make(board_id: String, board_size := "") -> Playfield:
 
 
 func _panel_rect(_pf: Playfield) -> Rect2:
-	return Rect2(-Playfield.PANEL_SPACE, 0.0, Playfield.PANEL_W, Playfield.PANEL_BOTTOM)
+	# The panel starts above the board's top edge (the round buttons sit there).
+	var top := Playfield.PANEL_BUTTON_Y - Playfield.REROLL_RADIUS - 4.0
+	return Rect2(-Playfield.PANEL_SPACE, top, Playfield.PANEL_W, Playfield.PANEL_BOTTOM - top)
 
 
 func _click(pf: Playfield, pos: Vector2) -> void:
@@ -39,7 +41,7 @@ func _init() -> void:
 		pf.progression.mods.add(Cards.REROLL)
 		for hit in [pf._reroll_center(), pf._scrap_center()]:
 			_check(hit.x < 0.0 and panel.has_point(hit), tag + "buttons sit inside the panel")
-			_check(hit.y > Playfield.PANEL_HELD_Y, tag + "buttons are below NOW")
+			_check(hit.y < Playfield.PANEL_HELD_Y - 30.0, tag + "buttons are above NOW")
 		_check(pf._reroll_center().distance_to(pf._scrap_center()) > 2.0 * Playfield.REROLL_RADIUS, tag + "buttons do not overlap")
 		_check(Playfield.PANEL_HELD_Y < pf._queue_label_y() and pf._queue_label_y() < pf._queue_top(), tag + "NOW above COMING UP above the previews")
 		_check(pf._queue_label_y() > pf._scrap_center().y + Playfield.SCRAP_RADIUS, tag + "COMING UP is below the buttons")
