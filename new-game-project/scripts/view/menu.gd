@@ -54,8 +54,9 @@ func _init() -> void:
 	_spacer(box, 6)
 
 	_address = LineEdit.new()
-	_address.placeholder_text = "Host IP address"
-	_address.text = "127.0.0.1"
+	_address.placeholder_text = "Room code"
+	_address.max_length = 6
+	_address.text = ""
 	_address.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_address.custom_minimum_size = Vector2(0, 40)
 	_address.add_theme_color_override("font_color", Palette.TEXT)
@@ -106,7 +107,10 @@ func _init() -> void:
 func _on_join() -> void:
 	if _join_btn.disabled:
 		return
-	choose.emit("join", _address.text.strip_edges())
+	if _address.text.strip_edges() == "":
+		set_status("Enter the room code the host shows.")
+		return
+	choose.emit("join", _address.text.strip_edges().to_upper())
 
 
 func set_status(text: String) -> void:
@@ -125,16 +129,9 @@ func set_busy(busy: bool) -> void:
 func get_default_status_for(mode: String) -> String:
 	match mode:
 		"host":
-			var ips: Array[String] = []
-			for a in IP.get_local_addresses():
-				if a.count(".") == 3 and not a.contains(":") and not a.begins_with("127.") and not a.begins_with("169.254."):
-					if not ips.has(a):
-						ips.append(a)
-			var shown := ips.slice(0, 3)
-			var list := ", ".join(shown) if not shown.is_empty() else "unknown"
-			return "Waiting for opponent... your addresses: %s (port %d)" % [list, NetSession.DEFAULT_PORT]
+			return "Creating a room..."
 		"join":
-			return "Connecting to %s..." % _address.text.strip_edges()
+			return "Joining room %s..." % _address.text.strip_edges().to_upper()
 	return ""
 
 

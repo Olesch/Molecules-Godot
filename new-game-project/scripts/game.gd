@@ -51,6 +51,7 @@ func _ready() -> void:
 	_net = NetSession.new()
 	_net.name = "NetSession"
 	add_child(_net)
+	_net.room_ready.connect(_on_room_ready)
 	_net.connected.connect(_on_net_connected)
 	_net.disconnected.connect(_on_net_disconnected)
 	_net.game_start.connect(_on_game_start)
@@ -225,10 +226,7 @@ func _on_host_setup_started(config: GameConfig) -> void:
 func _start_hosting() -> void:
 	_net.match_options = _match_config.to_dict()
 	_net.expected_cells = _cells_of(_match_config)
-	var err := _net.host()
-	if err != OK:
-		_menu.set_status("Could not host (%s). Is the port already in use?" % error_string(err))
-		return
+	_net.host_relay(RelayTransport.DEFAULT_URL)
 	_mode = Mode.HOSTING
 	_menu.set_busy(true)
 	_menu.set_status(_menu.get_default_status_for("host"))
@@ -259,10 +257,7 @@ func _on_menu_choose(mode: String, address: String) -> void:
 		"host":
 			_open_host_setup()
 		"join":
-			var err := _net.join(address)
-			if err != OK:
-				_menu.set_status("Could not connect (%s)." % error_string(err))
-				return
+			_net.join_relay(RelayTransport.DEFAULT_URL, address)
 			_mode = Mode.JOINING
 			_menu.set_busy(true)
 			_menu.set_status(_menu.get_default_status_for("join"))
@@ -277,6 +272,11 @@ func _on_menu_choose(mode: String, address: String) -> void:
 			_menu.set_status("")
 
 
+func _on_room_ready(code: String) -> void:
+	if _mode == Mode.HOSTING:
+		_menu.set_status("Room code: %s - tell it to your opponent. Waiting..." % code)
+
+
 func _on_net_connected() -> void:
 	if _mode == Mode.HOSTING or _mode == Mode.JOINING:
 		_enter_versus()
@@ -287,7 +287,10 @@ func _on_net_disconnected() -> void:
 		Mode.VERSUS:
 			_back_to_menu("Opponent disconnected.")
 		Mode.JOINING:
-			_back_to_menu("Could not connect to the host.")
+			_back_to_menu("Could not join: %s." % (_net.last_error if _net.last_error != "" else "no answer from the host"))
+		Mode.HOSTING:
+			if _net.last_error != "":
+				_back_to_menu("Could not create a room: %s." % _net.last_error)
 		_:
 			pass # a failed pairing attempt while hosting; keep waiting
 

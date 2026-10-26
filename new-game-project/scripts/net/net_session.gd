@@ -1,5 +1,6 @@
 class_name NetSession extends Node
-## 1v1 networking layer (ENet + high-level multiplayer RPC).
+## 1v1 networking layer. Two transports: a relay (WebSocket, works in the browser and needs no port
+## forwarding: host_relay/join_relay) and ENet with high-level multiplayer RPC (host/join, LAN).
 ## IMPORTANT: @rpc routing is by node path. The NetSession node must have the
 ## same name and the same parent path on both peers (e.g. both add it as
 ## child "NetSession" under an identically named node such as /root/Game).
@@ -17,6 +18,8 @@ signal game_start(seed: int)
 ## The host's match options (e.g. the board shape), emitted on the client just before game_start.
 ## Values are plain strings; the receiver validates them (see GameConfig.from_dict).
 signal options_received(options: Dictionary)
+## Relay host: the relay created the room; `code` is what the other player enters.
+signal room_ready(code: String)
 
 var is_host := false
 ## Set by the host before a match: sent to the client with every game start (rematches too).
@@ -25,6 +28,11 @@ var match_options := {}
 ## match options are known).
 var expected_cells := CELL_COUNT
 
+## Why the last relay connection failed (empty when it did not).
+var last_error := ""
+var room_code := ""
+
+var _relay: RelayTransport = null
 var _peer_id := 0 # remote peer id, 0 when none
 var _host_ready := false
 var _client_ready := false
@@ -78,9 +86,39 @@ func join(address: String, port := DEFAULT_PORT) -> Error:
 	return OK
 
 
+func host_relay(url: String) -> void:
+	close()
+	is_host = true
+	_start_relay()
+	_relay.host(url, "host")
+
+
+func join_relay(url: String, code: String) -> void:
+	close()
+	is_host = false
+	_start_relay()
+	_relay.join(url, code, "guest")
+
+
+func _start_relay() -> void:
+	last_error = ""
+	room_code = ""
+	_relay = RelayTransport.new()
+	add_child(_relay)
+	_relay.room_ready.connect(_on_relay_room_ready)
+	_relay.peer_joined.connect(_on_relay_peer_joined)
+	_relay.peer_left.connect(_on_relay_peer_left)
+	_relay.host_presence.connect(_on_relay_host_presence)
+	_relay.message.connect(_on_relay_message)
+	_relay.failed.connect(_on_relay_failed)
+
+
 func close() -> void:
+	if _relay != null:
+		_relay.shutdown()
+		_relay = null
 	_unhook()
-	if multiplayer.multiplayer_peer != null:
+	if is_inside_tree() and multiplayer.multiplayer_peer != null:
 		multiplayer.multiplayer_peer.close()
 		multiplayer.multiplayer_peer = null
 	_peer_id = 0
@@ -96,17 +134,29 @@ func is_peer_connected() -> bool:
 # ---- sending ----
 
 func send_snapshot(cells: PackedInt32Array) -> void:
-	if is_peer_connected():
+	if not is_peer_connected():
+		return
+	if _relay != null:
+		_relay_send({"k": "snap", "cells": cells})
+	else:
 		_rpc_snapshot.rpc_id(_peer_id, cells)
 
 
 func send_attack(amount: int) -> void:
-	if is_peer_connected():
+	if not is_peer_connected():
+		return
+	if _relay != null:
+		_relay_send({"k": "attack", "n": amount})
+	else:
 		_rpc_attack.rpc_id(_peer_id, amount)
 
 
 func send_lost() -> void:
-	if is_peer_connected():
+	if not is_peer_connected():
+		return
+	if _relay != null:
+		_relay_send({"k": "lost"})
+	else:
 		_rpc_lost.rpc_id(_peer_id)
 
 
@@ -116,6 +166,8 @@ func send_ready() -> void:
 	if is_host:
 		_host_ready = true
 		_check_start()
+	elif _relay != null:
+		_relay_send({"k": "ready"})
 	else:
 		_rpc_ready.rpc_id(_peer_id)
 
@@ -129,7 +181,10 @@ func _check_start() -> void:
 	while s == _last_seed:
 		s = randi()
 	_last_seed = s
-	_rpc_start.rpc_id(_peer_id, s, match_options)
+	if _relay != null:
+		_relay_send({"k": "start", "seed": s, "options": match_options})
+	else:
+		_rpc_start.rpc_id(_peer_id, s, match_options)
 	game_start.emit(s)
 
 
@@ -141,36 +196,53 @@ func _from_peer() -> bool:
 
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_snapshot(cells: PackedInt32Array) -> void:
-	if not _from_peer() or cells.size() != expected_cells:
-		return
-	peer_snapshot.emit(cells)
+	if _from_peer():
+		_got_snapshot(cells)
 
 
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_attack(amount: int) -> void:
-	if not _from_peer() or amount < 0 or amount > MAX_ATTACK:
-		return
-	peer_attack.emit(amount)
+	if _from_peer():
+		_got_attack(amount)
 
 
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_lost() -> void:
-	if not _from_peer():
-		return
-	peer_lost.emit()
+	if _from_peer():
+		peer_lost.emit()
 
 
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_ready() -> void:
-	if not is_host or not _from_peer():
+	if _from_peer():
+		_got_ready()
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_start(s: int, options: Dictionary) -> void:
+	if _from_peer():
+		_got_start(s, options)
+
+
+func _got_snapshot(cells: PackedInt32Array) -> void:
+	if cells.size() == expected_cells:
+		peer_snapshot.emit(cells)
+
+
+func _got_attack(amount: int) -> void:
+	if amount >= 0 and amount <= MAX_ATTACK:
+		peer_attack.emit(amount)
+
+
+func _got_ready() -> void:
+	if not is_host:
 		return
 	_client_ready = true
 	_check_start()
 
 
-@rpc("any_peer", "call_remote", "reliable")
-func _rpc_start(s: int, options: Dictionary) -> void:
-	if is_host or not _from_peer():
+func _got_start(s: int, options: Dictionary) -> void:
+	if is_host:
 		return
 	var clean := {}
 	for key in options:
@@ -178,6 +250,73 @@ func _rpc_start(s: int, options: Dictionary) -> void:
 			clean[String(key)] = String(options[key])
 	options_received.emit(clean)
 	game_start.emit(s)
+
+
+# ---- relay ----
+
+func _relay_send(msg: Dictionary) -> void:
+	if is_host:
+		_relay.send_to(_peer_id, msg)
+	else:
+		_relay.send_host(msg)
+
+
+func _on_relay_room_ready(info: Dictionary) -> void:
+	if is_host:
+		room_code = str(info.get("code", ""))
+		room_ready.emit(room_code)
+	elif _peer_id == 0:
+		_peer_id = 1
+		connected.emit()
+
+
+func _on_relay_peer_joined(peer: int, _name: String, _resumed: bool) -> void:
+	if not is_host or _peer_id != 0:
+		return
+	_peer_id = peer
+	_relay.lock(true) # one opponent only
+	connected.emit()
+
+
+func _on_relay_peer_left(peer: int) -> void:
+	if not is_host or peer != _peer_id:
+		return
+	_peer_id = 0
+	_host_ready = false
+	_client_ready = false
+	_relay.lock(false)
+	disconnected.emit()
+
+
+func _on_relay_host_presence(online: bool) -> void:
+	if not online and not is_host and _peer_id != 0:
+		_peer_id = 0
+		disconnected.emit()
+
+
+func _on_relay_failed(_code: int, reason: String) -> void:
+	last_error = reason
+	_peer_id = 0
+	disconnected.emit()
+
+
+func _on_relay_message(from: int, data: Variant) -> void:
+	if from != _peer_id or not (data is Dictionary):
+		return
+	match str(data.get("k", "")):
+		"snap":
+			if data.get("cells") is PackedInt32Array:
+				_got_snapshot(data["cells"])
+		"attack":
+			if data.get("n") is int:
+				_got_attack(data["n"])
+		"lost":
+			peer_lost.emit()
+		"ready":
+			_got_ready()
+		"start":
+			if data.get("seed") is int and data.get("options") is Dictionary:
+				_got_start(data["seed"], data["options"])
 
 
 # ---- connection events ----
