@@ -63,3 +63,7 @@ godot --headless --path . --script res://tests/relay_net_test.gd      # host + g
 - `scripts/audio/` - music mixer; `assets/` - generated sound effects and music
 - `tools/` - Python generators for the audio (`python tools/generate_sfx.py`, `generate_music.py`, `generate_layers.py`)
 - `docs/` - the web build served by GitHub Pages (generated, do not edit)
+
+## License
+
+[MIT](LICENSE)
